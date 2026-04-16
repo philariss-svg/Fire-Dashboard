@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="FIRE Tracker">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f1117">
+<title>FIRE Dashboard — UK Joint Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117; --card: #1a1d27; --card-hover: #222633; --border: #2a2e3d;
+    --text: #e4e6ed; --text-muted: #8b8fa3; --accent: #6c5ce7; --accent-light: #a29bfe;
+    --green: #00b894; --green-bg: rgba(0,184,148,0.12); --orange: #fdcb6e;
+    --orange-bg: rgba(253,203,110,0.12); --red: #ff7675; --red-bg: rgba(255,118,117,0.12);
+    --blue: #74b9ff; --blue-bg: rgba(116,185,255,0.12); --pink: #fd79a8;
+    --chart-grid: #1e2130;
+  }
+  html.light {
+    --bg: #f0f2f5; --card: #ffffff; --card-hover: #f7f8fa; --border: #dde1e8;
+    --text: #1a1d27; --text-muted: #5f6477; --accent: #5b4cdb; --accent-light: #5b4cdb;
+    --green: #00a884; --green-bg: rgba(0,168,132,0.10); --orange: #e6a817;
+    --orange-bg: rgba(230,168,23,0.10); --red: #e05554; --red-bg: rgba(224,85,84,0.10);
+    --blue: #3a8fd6; --blue-bg: rgba(58,143,214,0.10); --pink: #d6618f;
+    --chart-grid: #e2e5eb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+  .app { display: flex; min-height: 100vh; }
+  .sidebar { width: 400px; min-width: 400px; background: var(--card); border-right: 1px solid var(--border); overflow-y: auto; height: 100vh; position: sticky; top: 0; padding: 20px; }
+  .sidebar h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--accent-light); margin: 20px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .sidebar h2:first-child { margin-top: 0; }
+  .sidebar h3 { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; margin: 12px 0 6px 0; }
+  .input-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  .input-group.triple { grid-template-columns: 1fr 1fr 1fr; }
+  .input-group.quad { grid-template-columns: 2fr 1fr 1fr 1fr; }
+  .field { display: flex; flex-direction: column; }
+  .field label { font-size: 11px; color: var(--text-muted); margin-bottom: 3px; font-weight: 500; }
+  .field input, .field select { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 7px 10px; font-size: 13px; outline: none; transition: border-color 0.2s; }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field input[type="range"] { padding: 0; border: none; background: none; accent-color: var(--accent); height: 20px; }
+  .range-row { display: flex; align-items: center; gap: 8px; }
+  .range-row input[type="range"] { flex: 1; }
+  .range-val { font-size: 13px; font-weight: 600; color: var(--accent-light); min-width: 52px; text-align: right; }
+  .name-input { background: transparent !important; border: 1px solid transparent !important; color: var(--accent-light) !important; font-size: 13px !important; font-weight: 700 !important; letter-spacing: 1.2px !important; text-transform: uppercase !important; padding: 0 !important; cursor: text; width: 100%; }
+  .name-input:hover { border-color: var(--border) !important; }
+  .name-input:focus { border-color: var(--accent) !important; background: var(--bg) !important; }
+  .computed-total { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: var(--bg); border-radius: 6px; font-size: 13px; font-weight: 600; margin-top: 4px; margin-bottom: 8px; }
+  .computed-total .ct-label { color: var(--text-muted); font-weight: 500; }
+  .computed-total .ct-value { color: var(--green); }
+  .annual-row { display: grid; grid-template-columns: 1fr 100px 28px; gap: 6px; align-items: end; margin-bottom: 6px; }
+  .annual-row input { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 7px 6px; font-size: 12px; outline: none; width: 100%; }
+  .annual-row input:focus { border-color: var(--accent); }
+  .annual-row .remove-btn, .phase-row .remove-btn { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--red); cursor: pointer; font-size: 14px; padding: 6px 0; line-height: 1; transition: background 0.2s; }
+  .annual-row .remove-btn:hover, .phase-row .remove-btn:hover { background: var(--red-bg); }
+  .annual-labels { display: grid; grid-template-columns: 1fr 100px 28px; gap: 6px; margin-bottom: 4px; }
+  .annual-labels span { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .add-btn { background: none; border: 1px dashed var(--border); border-radius: 6px; color: var(--accent-light); cursor: pointer; font-size: 12px; padding: 6px 12px; margin-top: 4px; width: 100%; transition: background 0.2s, border-color 0.2s; }
+  .add-btn:hover { background: rgba(108,92,231,0.1); border-color: var(--accent); }
+  .phase-row { display: grid; grid-template-columns: 50px 50px 1fr 28px; gap: 6px; align-items: end; margin-bottom: 6px; }
+  .phase-row input { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 7px 6px; font-size: 12px; outline: none; width: 100%; }
+  .phase-row input:focus { border-color: var(--accent); }
+  .phase-labels { display: grid; grid-template-columns: 50px 50px 1fr 28px; gap: 6px; margin-bottom: 4px; }
+  .phase-labels span { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .acct-header { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 6px; margin-bottom: 4px; }
+  .acct-header span { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .acct-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 6px; align-items: end; margin-bottom: 6px; }
+  .acct-row .acct-label { font-size: 12px; font-weight: 600; color: var(--text); padding: 8px 0; }
+  .acct-row input { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 7px 6px; font-size: 12px; outline: none; width: 100%; }
+  .acct-row input:focus { border-color: var(--accent); }
+  .main { flex: 1; padding: 24px 32px; overflow-y: auto; }
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .header h1 { font-size: 24px; font-weight: 700; background: linear-gradient(135deg, var(--accent-light), var(--green)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .header .date { color: var(--text-muted); font-size: 13px; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .metric-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; transition: background 0.2s; }
+  .metric-card:hover { background: var(--card-hover); }
+  .metric-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 6px; }
+  .metric-card .value { font-size: 26px; font-weight: 700; }
+  .metric-card .sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+  .green { color: var(--green); } .orange { color: var(--orange); } .blue { color: var(--blue); } .pink { color: var(--pink); } .accent { color: var(--accent-light); } .red { color: var(--red); }
+  .milestones-section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+  .milestones-section .section-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .milestones-section .section-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+  .milestone-track { position: relative; background: var(--bg); border-radius: 10px; height: 32px; margin-bottom: 8px; overflow: visible; }
+  .milestone-fill { height: 100%; border-radius: 10px; background: linear-gradient(90deg, var(--accent), var(--green)); transition: width 0.6s ease; position: absolute; top: 0; left: 0; z-index: 1; }
+  .milestone-markers { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 2; }
+  .milestone-marker { position: absolute; top: -2px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; }
+  .milestone-marker .marker-line { width: 2px; height: 36px; background: var(--border); border-radius: 1px; }
+  .milestone-marker.reached .marker-line { background: rgba(255,255,255,0.5); }
+  .milestone-marker .marker-label { margin-top: 6px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); white-space: nowrap; }
+  .milestone-marker.reached .marker-label { color: var(--green); }
+  .milestones-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 20px; }
+  .milestone-card { background: var(--bg); border-radius: 8px; padding: 12px; text-align: center; border: 1px solid var(--border); transition: border-color 0.3s; position: relative; cursor: default; }
+  .milestone-card.reached { border-color: var(--green); background: var(--green-bg); }
+  .milestone-card.current { border-color: var(--orange); background: var(--orange-bg); }
+  .milestone-card .ms-icon { font-size: 20px; margin-bottom: 4px; }
+  .milestone-card .ms-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+  .milestone-card.reached .ms-name { color: var(--green); }
+  .milestone-card.current .ms-name { color: var(--orange); }
+  .milestone-card .ms-target-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-top: 4px; }
+  .milestone-card .ms-target { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+  .milestone-card .ms-prob { font-size: 10px; font-weight: 600; margin-top: 3px; padding: 2px 8px; border-radius: 4px; display: inline-block; }
+  .milestone-card .ms-prob.high { color: var(--green); background: var(--green-bg); }
+  .milestone-card .ms-prob.med { color: var(--orange); background: var(--orange-bg); }
+  .milestone-card .ms-prob.low { color: var(--red); background: var(--red-bg); }
+  .milestone-card .ms-status { font-size: 11px; font-weight: 600; }
+  .milestone-card.reached .ms-status { color: var(--green); }
+  .milestone-card.current .ms-status { color: var(--orange); }
+  .milestone-card .ms-tooltip { display: none; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 12px; line-height: 1.5; text-align: left; width: 260px; z-index: 100; box-shadow: 0 4px 20px rgba(0,0,0,0.15); pointer-events: none; }
+  .milestone-card .ms-tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 6px solid transparent; border-top-color: var(--card); }
+  .milestone-card:hover .ms-tooltip { display: block; }
+  .charts-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .chart-card .title { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+  .chart-card canvas { max-height: 320px; }
+  .breakdown-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .breakdown-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .breakdown-card .title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+  .breakdown-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .breakdown-row:last-child { border-bottom: none; }
+  .breakdown-row .item-label { color: var(--text-muted); }
+  .breakdown-row .item-value { font-weight: 600; }
+  .breakdown-row.total { border-top: 2px solid var(--border); border-bottom: none; padding-top: 10px; margin-top: 4px; }
+  .breakdown-row.total .item-label { color: var(--text); font-weight: 600; }
+  .retirement-income { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+  .retirement-income .title { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+  .income-phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+  .phase-card { background: var(--bg); border-radius: 8px; padding: 16px; }
+  .phase-card h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--accent-light); margin-bottom: 10px; }
+  .spending-timeline { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .spending-timeline .title { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: var(--text-muted); }
+  .fi-re-callout { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .callout-item .callout-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
+  .callout-item .callout-value { font-size: 15px; font-weight: 700; }
+  .callout-item .callout-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .assumptions-note { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+  .assumptions-note strong { color: var(--orange); }
+  .theme-btn { background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text-muted); cursor: pointer; font-size: 18px; padding: 4px 10px; margin-left: 10px; transition: background 0.2s, border-color 0.2s; line-height: 1; touch-action: manipulation; -webkit-tap-highlight-color: rgba(108,92,231,0.3); -webkit-appearance: none; }
+  .theme-btn:hover { background: var(--card-hover); border-color: var(--accent); }
+  ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: var(--bg); } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* === WALKTHROUGH OVERLAY === */
+  .walkthrough-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); z-index: 20000; display: flex; align-items: center; justify-content: center; }
+  .walkthrough-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; max-width: 540px; width: 90vw; padding: 32px; position: relative; box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+  .walkthrough-card h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; background: linear-gradient(135deg, var(--accent-light), var(--green)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .walkthrough-card .wt-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+  .walkthrough-card .wt-step { margin-bottom: 16px; }
+  .walkthrough-card .wt-step-num { display: inline-block; width: 24px; height: 24px; line-height: 24px; text-align: center; border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; margin-right: 10px; vertical-align: middle; }
+  .walkthrough-card .wt-step-text { font-size: 14px; color: var(--text); line-height: 1.6; }
+  .walkthrough-card .wt-step-text strong { color: var(--accent-light); }
+  .walkthrough-card .wt-step-detail { font-size: 12px; color: var(--text-muted); margin-top: 3px; margin-left: 34px; line-height: 1.5; }
+  .walkthrough-card .wt-tip { background: var(--bg); border-radius: 8px; padding: 12px 14px; margin: 16px 0; font-size: 12px; color: var(--text-muted); line-height: 1.6; border-left: 3px solid var(--accent); }
+  .walkthrough-btns { display: flex; gap: 10px; margin-top: 24px; }
+  .wt-btn { flex: 1; padding: 12px 16px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s, opacity 0.2s; touch-action: manipulation; }
+  .wt-btn.primary { background: var(--accent); color: #fff; }
+  .wt-btn.primary:hover { opacity: 0.85; }
+  .wt-btn.secondary { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); }
+  .wt-btn.secondary:hover { background: var(--card-hover); }
+  .wt-dots { display: flex; justify-content: center; gap: 8px; margin-top: 16px; }
+  .wt-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: background 0.2s; }
+  .wt-dot.active { background: var(--accent); }
+
+  /* === INLINE HELP TOOLTIPS === */
+  .help-tip { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--border); color: var(--text-muted); font-size: 10px; font-weight: 700; cursor: help; margin-left: 5px; vertical-align: middle; position: relative; flex-shrink: 0; touch-action: manipulation; -webkit-tap-highlight-color: rgba(108,92,231,0.3); }
+  .help-tip:hover { background: var(--accent); color: #fff; }
+  .help-tip .tip-content { display: none; position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 12px; font-weight: 400; line-height: 1.5; text-align: left; width: 240px; z-index: 15000; box-shadow: 0 4px 16px rgba(0,0,0,0.2); pointer-events: none; text-transform: none; letter-spacing: normal; }
+  .help-tip .tip-content::after { content: ''; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); border: 6px solid transparent; border-bottom-color: var(--card); }
+  .help-tip:hover .tip-content, .help-tip.active .tip-content { display: block; }
+  .help-tip .tip-title { display: block; font-weight: 600; color: var(--accent-light); margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .help-tip .tip-example { background: var(--bg); border-radius: 4px; padding: 6px 8px; margin-top: 6px; font-size: 11px; color: var(--text-muted); }
+
+  /* === BRIDGE ANALYSIS === */
+  .bridge-section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+  .bridge-section .section-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+  .bridge-section .section-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5; }
+  .bridge-phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .bridge-phase { background: var(--bg); border-radius: 8px; padding: 14px; border: 1px solid var(--border); }
+  .bridge-phase .bp-header { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--accent-light); font-weight: 700; margin-bottom: 8px; }
+  .bridge-phase .bp-ages { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+  .bridge-phase .bp-row { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; }
+  .bridge-phase .bp-row .bp-label { color: var(--text-muted); }
+  .bridge-phase .bp-row .bp-value { font-weight: 600; }
+  .bridge-phase .bp-total { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; padding-top: 6px; margin-top: 6px; border-top: 1px solid var(--border); }
+  .bridge-phase .bp-source { font-size: 11px; color: var(--text-muted); margin-top: 8px; padding: 6px 8px; background: rgba(108,92,231,0.06); border-radius: 4px; }
+  .bridge-phase .bp-source strong { color: var(--text); }
+  .bridge-summary-bar { margin-bottom: 16px; }
+  .bridge-bar-track { background: var(--bg); border-radius: 8px; height: 28px; position: relative; overflow: hidden; margin-bottom: 6px; border: 1px solid var(--border); }
+  .bridge-bar-fill { height: 100%; border-radius: 7px; transition: width 0.6s ease; }
+  .bridge-bar-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); }
+  .bridge-stress { margin-top: 16px; }
+  .bridge-stress .bs-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  .stress-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  .stress-card { background: var(--bg); border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+  .stress-card .sc-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+  .stress-card .sc-desc { font-size: 10px; color: var(--text-muted); margin-bottom: 8px; line-height: 1.4; }
+  .stress-card .sc-result { font-size: 18px; font-weight: 700; }
+  .stress-card .sc-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .stress-card.safe { border-color: var(--green); }
+  .stress-card.caution { border-color: var(--orange); }
+  .stress-card.danger { border-color: var(--red); }
+  .bridge-phase.bridge-safe { border-color: var(--green); background: var(--green-bg); }
+  .bridge-phase.bridge-caution { border-color: var(--orange); background: var(--orange-bg); }
+  .bridge-phase.bridge-danger { border-color: var(--red); background: var(--red-bg); }
+
+  /* Mobile hamburger — hidden on desktop */
+  .hamburger { display: none; background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); cursor: pointer; font-size: 22px; width: 44px; height: 44px; line-height: 1; touch-action: manipulation; -webkit-tap-highlight-color: rgba(108,92,231,0.3); -webkit-appearance: none; }
+  .sidebar-overlay { display: none; }
+
+  @media (max-width: 1200px) { .charts-grid, .breakdown-grid { grid-template-columns: 1fr; } }
+
+  @media (max-width: 900px) {
+    .hamburger { display: block; position: fixed; top: 12px; left: 12px; z-index: 10001; }
+    .sidebar-overlay.active { display: block; position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; pointer-events: auto; }
+    .app { flex-direction: column; }
+    .sidebar { position: fixed; left: -100%; top: 0; width: 85vw; max-width: 400px; min-width: unset; height: 100%; z-index: 1000; border-right: 1px solid var(--border); transition: left 0.3s ease; padding-top: 56px; pointer-events: none; visibility: hidden; }
+    .sidebar.open { left: 0; box-shadow: 4px 0 24px rgba(0,0,0,0.3); pointer-events: auto; visibility: visible; }
+    .main { padding: 16px; padding-top: 64px; }
+    .header { flex-wrap: wrap; gap: 8px; }
+    .header h1 { font-size: 20px; }
+    .header .date { font-size: 11px; }
+    .metrics { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .metric-card { padding: 14px; }
+    .metric-card .value { font-size: 20px; }
+    .metric-card .sub { font-size: 10px; }
+    .fi-re-callout { grid-template-columns: 1fr; gap: 12px; }
+    .milestones-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .milestone-card .ms-tooltip { width: 200px; font-size: 11px; }
+    .charts-grid { grid-template-columns: 1fr; }
+    .chart-card canvas { max-height: 240px; }
+    .breakdown-grid { grid-template-columns: 1fr; }
+    .income-phases { grid-template-columns: 1fr; }
+    /* Sidebar mobile input tweaks */
+    .input-group { grid-template-columns: 1fr; }
+    .input-group.triple { grid-template-columns: 1fr 1fr 1fr; }
+    .field input, .field select { font-size: 16px; padding: 10px; border-radius: 8px; }
+    .add-btn { padding: 10px 12px; font-size: 13px; }
+    .annual-row .remove-btn, .phase-row .remove-btn { padding: 10px 0; }
+  }
+
+  @media (max-width: 480px) {
+    .metrics { grid-template-columns: 1fr; gap: 8px; }
+    .milestones-grid { grid-template-columns: 1fr; }
+    .milestone-track { height: 24px; }
+    .milestone-marker .marker-line { height: 28px; }
+    .milestone-marker .marker-label { font-size: 8px; }
+    .main { padding: 12px; padding-top: 56px; }
+    .header h1 { font-size: 18px; }
+    .metric-card .value { font-size: 18px; }
+    .chart-card canvas { max-height: 200px; }
+    .fi-re-callout { padding: 10px 12px; }
+    .callout-item .callout-value { font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- WALKTHROUGH OVERLAY -->
+<div class="walkthrough-overlay" id="walkthrough" style="display:none;">
+  <div class="walkthrough-card">
+    <div id="wtContent"></div>
+    <div class="walkthrough-btns">
+      <button type="button" class="wt-btn secondary" id="wtBack" onclick="wtNav(-1)">Back</button>
+      <button type="button" class="wt-btn primary" id="wtNext" onclick="wtNav(1)">Next</button>
+    </div>
+    <div class="wt-dots" id="wtDots"></div>
+  </div>
+</div>
+
+<button type="button" class="hamburger" id="menuToggle" onclick="toggleSidebar()">&#9776;</button>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+<div class="app">
+<div class="sidebar" id="sidebar">
+
+  <h2 style="margin-top:0">Save / Load</h2>
+  <div style="display:flex;gap:8px;margin-bottom:8px;">
+    <button class="add-btn" id="exportBtn" style="margin-top:0;flex:1;">Export JSON</button>
+    <button class="add-btn" id="importBtn" style="margin-top:0;flex:1;">Import JSON</button>
+  </div>
+  <input type="file" id="importFile" accept=".json" style="display:none;">
+  <div id="saveStatus" style="font-size:11px;color:var(--green);text-align:center;margin-bottom:4px;opacity:0;transition:opacity 0.3s;">Saved</div>
+
+  <h2>General <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">Getting Started</span>Set your target retirement age and decide whether to include your home in your net worth calculation. Most FIRE planners exclude property since you need somewhere to live.</span></span></h2>
+  <div class="input-group">
+    <div class="field"><label>Target Retirement Age</label><input type="number" id="retireAge" value="60" min="40" max="70"></div>
+    <div class="field"><label>Include Property in NW?</label>
+      <select id="includeProperty"><option value="equity">Equity only</option><option value="no" selected>No (exclude)</option><option value="full">Full value</option></select>
+    </div>
+  </div>
+  <div class="input-group">
+    <div class="field"><label>Property Value (&pound;)</label><input type="number" id="propertyValue" value="0" step="5000"></div>
+    <div class="field"><label>Mortgage Outstanding (&pound;)</label><input type="number" id="mortgageBalance" value="0" step="1000"></div>
+  </div>
+
+  <h2>Monthly Household Expenses <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">Why track expenses?</span>Your monthly spending determines your savings rate &mdash; the single biggest factor in how fast you reach FIRE. Enter your actual spend, not what you think it should be. The mortgage field auto-stops at the year you specify.</span></span></h2>
+  <div class="input-group">
+    <div class="field"><label>Mortgage / Rent</label><input type="number" id="expMortgage" value="0" step="50"></div>
+    <div class="field"><label>Mortgage Ends (year)</label><input type="number" id="mortgageEndYear" value="2050" step="1" min="2025" max="2070"></div>
+  </div>
+  <div class="input-group">
+    <div class="field"><label>Bills &amp; Utilities</label><input type="number" id="expBills" value="0" step="50"></div>
+  </div>
+  <div class="input-group">
+    <div class="field"><label>Groceries &amp; Food</label><input type="number" id="expFood" value="0" step="50"></div>
+    <div class="field"><label>Transport</label><input type="number" id="expTransport" value="0" step="50"></div>
+  </div>
+  <div class="input-group">
+    <div class="field"><label>Insurance</label><input type="number" id="expInsurance" value="0" step="50"></div>
+    <div class="field"><label>Subscriptions &amp; Other</label><input type="number" id="expOther" value="0" step="50"></div>
+  </div>
+  <div class="computed-total"><span class="ct-label">Total Monthly Expenses</span><span class="ct-value" id="totalMonthlyExp">&mdash;</span></div>
+
+  <h2>Large Annual Payments <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">Don't forget the big lumpy costs</span>These are the things that don't show up monthly but eat into your budget: holidays, MOT, car insurance, boiler servicing, Christmas. They're divided by 12 and added to your monthly expenses.</span></span></h2>
+  <p style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Holidays, car costs, home maintenance, gifts, etc.</p>
+  <div class="annual-labels"><span>Description</span><span>Amount (&pound;)</span><span></span></div>
+  <div id="annualPayments"></div>
+  <button class="add-btn" id="addAnnualBtn">+ Add Item</button>
+  <div class="computed-total"><span class="ct-label">Annual Total (&divide;12/mo)</span><span class="ct-value" id="totalAnnualPay">&mdash;</span></div>
+
+  <h2>Retirement Spending Phases <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">Spending changes over time</span>Most retirees spend more in their active early years (travel, hobbies) and less later. Set different amounts for each phase. These figures drive your FIRE target number &mdash; the dashboard works backwards from what you need to spend.<span class="tip-example">Example: &pound;35k ages 55-65, &pound;28k ages 65-80, &pound;22k ages 80-95</span></span></span></h2>
+  <p style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">How much you want to live on at each stage of retirement (today's money).</p>
+  <div class="phase-labels"><span>From</span><span>To</span><span>Annual Spend (&pound;)</span><span></span></div>
+  <div id="spendingPhases"></div>
+  <button class="add-btn" id="addPhaseBtn">+ Add Phase</button>
+  <h3 style="margin-top:14px;">FIRE Milestone Multipliers <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">Lean, Comfortable &amp; Fat FIRE</span>These multiply your spending phases to create different targets. <strong>Lean FIRE</strong> (e.g. 0.7&times;) = bare minimum to survive. <strong>Comfortable</strong> (e.g. 1.25&times;) = a cushion above your plan. <strong>Fat FIRE</strong> (e.g. 1.5&times;) = living large. The dashboard shows milestones for each level.</span></span></h3>
+  <p style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Set how Lean, Comfortable &amp; Fat FIRE relate to your planned spending.</p>
+  <div class="input-group triple">
+    <div class="field"><label>Lean FIRE</label><input type="number" id="leanMult" value="0.7" step="0.05" min="0.3" max="1.0"></div>
+    <div class="field"><label>Comfortable</label><input type="number" id="comfMult" value="1.25" step="0.05" min="1.0" max="2.0"></div>
+    <div class="field"><label>Fat FIRE</label><input type="number" id="fatMult" value="1.5" step="0.05" min="1.0" max="3.0"></div>
+  </div>
+  <p style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">Multiplier of your spending phases. E.g. 0.7&times; = 70% of planned spend (lean), 1.5&times; = 150% (fat).</p>
+
+  <!-- PERSON 1 -->
+  <h2 style="display:flex;align-items:center;border:none;padding:0;margin-top:20px;margin-bottom:2px;">
+    <input type="text" id="p1Name" value="Person 1" class="name-input" style="max-width:200px;">
+  </h2>
+  <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);">Click name to edit</div>
+  <div class="input-group">
+    <div class="field"><label>Age</label><input type="number" id="p1Age" value="35" min="18" max="70"></div>
+    <div class="field"><label>Monthly Net Take-Home (&pound;)</label><input type="number" id="p1Income" value="0" step="100"></div>
+  </div>
+  <h3>Investment Accounts <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">ISA, SIPP &amp; GIA explained</span><strong>ISA</strong> &mdash; tax-free wrapper (&pound;20k/yr allowance). Growth and withdrawals untaxed.<br><strong>SIPP</strong> &mdash; pension you control. Tax relief on the way in, but locked until pension access age. 25% tax-free on withdrawal.<br><strong>GIA</strong> &mdash; general investment account. No tax wrapper, but no restrictions either.<br>Each account can have its own growth rate to reflect different investment strategies.</span></span></h3>
+  <div class="acct-header"><span>Account</span><span>Balance (&pound;)</span><span>Monthly (&pound;)</span><span>Growth %</span></div>
+  <div class="acct-row"><div class="acct-label">ISA</div><input type="number" id="p1ISA" value="0" step="1000"><input type="number" id="p1ISAContrib" value="0" step="50"><input type="number" id="p1ISAGrowth" value="7" step="0.5" min="0" max="15"></div>
+  <div class="acct-row"><div class="acct-label">SIPP</div><input type="number" id="p1SIPP" value="0" step="1000"><input type="number" id="p1SIPPContrib" value="0" step="50"><input type="number" id="p1SIPPGrowth" value="5" step="0.5" min="0" max="15"></div>
+  <div class="acct-row"><div class="acct-label">GIA</div><input type="number" id="p1GIA" value="0" step="1000"><input type="number" id="p1GIAContrib" value="0" step="50"><input type="number" id="p1GIAGrowth" value="6" step="0.5" min="0" max="15"></div>
+  <div class="input-group"><div class="field"><label>Cash Savings (&pound;)</label><input type="number" id="p1Cash" value="0" step="1000"></div></div>
+  <h3>Pensions <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">DB &amp; State Pensions</span><strong>DB (Defined Benefit)</strong> &mdash; a guaranteed annual income from a workplace scheme (e.g. NHS, civil service, teacher's). Check your annual benefit statement for the amount.<br><strong>State Pension</strong> &mdash; currently &pound;11,502/yr (2025/26) for full NI record. Check yours at gov.uk/check-state-pension. These reduce how much you need from your portfolio.</span></span></h3>
+  <div class="input-group">
+    <div class="field"><label>DB Pension (&pound;/yr)</label><input type="number" id="p1DB" value="0" step="500"></div>
+    <div class="field"><label>DB Pension From Age</label><input type="number" id="p1DBAge" value="67" min="50" max="70"></div>
+  </div>
+  <div class="input-group">
+    <div class="field"><label>State Pension (&pound;/yr)</label><input type="number" id="p1SP" value="0" step="100"></div>
+    <div class="field"><label>State Pension Age</label><input type="number" id="p1SPAge" value="67" min="60" max="70"></div>
+  </div>
+  <h3>Future Lump Sum <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">Lump Sums</span>Expected one-off windfalls like an inheritance, property sale, or bonus. The <strong>confidence %</strong> lets you weight it &mdash; set 100% if certain, 50% if possible, lower if speculative. The Monte Carlo simulation uses this to model uncertainty.</span></span> <span style="font-weight:400;font-size:9px;color:var(--text-muted);text-transform:none;">(inheritance, property sale, etc.)</span></h3>
+  <div class="input-group triple">
+    <div class="field"><label>Amount (&pound;)</label><input type="number" id="p1LumpAmount" value="0" step="5000" min="0"></div>
+    <div class="field"><label>At Age</label><input type="number" id="p1LumpAge" value="60" min="30" max="90"></div>
+    <div class="field"><label>Confidence %</label><input type="number" id="p1LumpConf" value="50" min="0" max="100" step="5"></div>
+  </div>
+
+  <!-- PERSON 2 -->
+  <h2 style="display:flex;align-items:center;border:none;padding:0;margin-top:20px;margin-bottom:2px;">
+    <input type="text" id="p2Name" value="Person 2" class="name-input" style="max-width:200px;">
+  </h2>
+  <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);">Click name to edit</div>
+  <div class="input-group">
+    <div class="field"><label>Age</label><input type="number" id="p2Age" value="35" min="18" max="70"></div>
+    <div class="field"><label>Monthly Net Take-Home (&pound;)</label><input type="number" id="p2Income" value="0" step="100"></div>
+  </div>
+  <h3>Investment Accounts</h3>
+  <div class="acct-header"><span>Account</span><span>Balance (&pound;)</span><span>Monthly (&pound;)</span><span>Growth %</span></div>
+  <div class="acct-row"><div class="acct-label">ISA</div><input type="number" id="p2ISA" value="0" step="1000"><input type="number" id="p2ISAContrib" value="0" step="50"><input type="number" id="p2ISAGrowth" value="7" step="0.5" min="0" max="15"></div>
+  <div class="acct-row"><div class="acct-label">SIPP</div><input type="number" id="p2SIPP" value="0" step="1000"><input type="number" id="p2SIPPContrib" value="0" step="50"><input type="number" id="p2SIPPGrowth" value="5" step="0.5" min="0" max="15"></div>
+  <div class="acct-row"><div class="acct-label">GIA</div><input type="number" id="p2GIA" value="0" step="1000"><input type="number" id="p2GIAContrib" value="0" step="50"><input type="number" id="p2GIAGrowth" value="6" step="0.5" min="0" max="15"></div>
+  <div class="input-group"><div class="field"><label>Cash Savings (&pound;)</label><input type="number" id="p2Cash" value="0" step="1000"></div></div>
+  <h3>Pensions</h3>
+  <div class="input-group">
+    <div class="field"><label>DB Pension (&pound;/yr)</label><input type="number" id="p2DB" value="0" step="500"></div>
+    <div class="field"><label>DB Pension From Age</label><input type="number" id="p2DBAge" value="67" min="50" max="70"></div>
+  </div>
+  <div class="input-group">
+    <div class="field"><label>State Pension (&pound;/yr)</label><input type="number" id="p2SP" value="0" step="100"></div>
+    <div class="field"><label>State Pension Age</label><input type="number" id="p2SPAge" value="67" min="60" max="70"></div>
+  </div>
+  <h3>Future Lump Sum <span style="font-weight:400;font-size:9px;color:var(--text-muted);text-transform:none;">(inheritance, property sale, etc.)</span></h3>
+  <div class="input-group triple">
+    <div class="field"><label>Amount (&pound;)</label><input type="number" id="p2LumpAmount" value="0" step="5000" min="0"></div>
+    <div class="field"><label>At Age</label><input type="number" id="p2LumpAge" value="60" min="30" max="90"></div>
+    <div class="field"><label>Confidence %</label><input type="number" id="p2LumpConf" value="50" min="0" max="100" step="5"></div>
+  </div>
+
+  <h2>Assumptions <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">Key modelling assumptions</span>These drive all the projections. <strong>Real return</strong> = growth after inflation during drawdown. <strong>Inflation</strong> = how fast prices rise (2-3% is typical UK). <strong>Volatility</strong> = how bumpy the ride is (used in Monte Carlo). <strong>SIPP tax rate</strong> = your marginal tax rate when withdrawing from pension (25% is tax-free, 75% taxed at this rate).</span></span></h2>
+  <div class="field" style="margin-bottom:10px"><label>Retirement Drawdown Return (real)</label>
+    <div class="range-row"><input type="range" id="realReturn" min="1" max="8" step="0.25" value="4"><span class="range-val" id="realReturnVal">4.0%</span></div>
+  </div>
+  <div class="field" style="margin-bottom:10px"><label>Inflation Assumption</label>
+    <div class="range-row"><input type="range" id="inflation" min="1" max="5" step="0.25" value="2.5"><span class="range-val" id="inflationVal">2.5%</span></div>
+  </div>
+  <div class="field" style="margin-bottom:10px"><label>Market Volatility (std dev)</label>
+    <div class="range-row"><input type="range" id="volatility" min="5" max="25" step="1" value="15"><span class="range-val" id="volatilityVal">15%</span></div>
+  </div>
+  <div class="input-group">
+    <div class="field"><label>Pension Access Age</label><input type="number" id="pensionAccessAge" value="57" min="55" max="60"></div>
+    <div class="field"><label>SIPP Tax Rate (%)</label><input type="number" id="sippTaxRate" value="20" min="0" max="45" step="1"></div>
+  </div>
+  <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">25% of SIPP is tax-free; remaining 75% taxed at this rate. Set 0% to ignore SIPP tax.</p>
+</div>
+
+<!-- MAIN DASHBOARD -->
+<div class="main">
+  <div class="header"><h1>FIRE Dashboard</h1><div style="display:flex;align-items:center;gap:6px"><div class="date" id="currentDate"></div><button type="button" class="theme-btn" id="replayTour" title="Replay welcome tour" style="font-size:13px;padding:4px 10px;">&#10068;</button><button type="button" class="theme-btn" id="themeToggle" onclick="toggleTheme()" title="Toggle light/dark mode">&#9790;</button></div></div>
+
+  <div class="metrics">
+    <div class="metric-card"><div class="label">Retire Early Number <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">RE Number</span>The portfolio size you need at your target retirement age to fund your planned spending for life. This accounts for pensions kicking in, phased spending, and SIPP tax. It's your finish line.</span></span></div><div class="value accent" id="reNumber">&mdash;</div><div class="sub" id="reSub"></div></div>
+    <div class="metric-card" id="nwCard" style="cursor:pointer"><div class="label"><span id="nwLabel">Investable Net Worth</span> <span class="help-tip" onclick="event.stopPropagation();this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">Net Worth</span>Your total investable assets (ISAs + SIPPs + GIAs + cash). Click the card to toggle between investable NW and total NW (which includes property). Property equity is optional in settings.</span></span> <span style="font-size:9px;color:var(--accent-light);margin-left:4px;">&#x21c4; toggle</span></div><div class="value green" id="netWorth">&mdash;</div><div class="sub" id="nwSub"></div></div>
+    <div class="metric-card"><div class="label">Progress to RE <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">How close are you?</span>Your projected portfolio at retirement age as a percentage of your RE number. Over 100% means you're on track to overshoot your target. This uses your current balances plus future contributions grown at each account's rate.</span></span></div><div class="value blue" id="rePercent">&mdash;</div><div class="sub" id="rePercentSub"></div></div>
+    <div class="metric-card"><div class="label">Earliest RE Date <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">When could you retire?</span>The earliest year your projected portfolio hits your RE target. This can be earlier or later than your target retirement age depending on your savings rate and growth.</span></span></div><div class="value orange" id="reDate">&mdash;</div><div class="sub" id="reDateSub">&mdash;</div></div>
+    <div class="metric-card"><div class="label">Monthly Surplus <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">What's left over</span>Your total household income minus all expenses (monthly bills + annual payments &divide; 12). This is what's available for saving and investing each month.</span></span></div><div class="value green" id="monthlySurplus">&mdash;</div><div class="sub" id="surplusSub">&mdash;</div></div>
+    <div class="metric-card"><div class="label">Savings Rate <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">The FIRE superpower</span>Percentage of your income going to investments (ISA + SIPP + GIA contributions for both people). A 50% savings rate roughly means you can retire in 17 years. Higher is better, but sustainability matters too.</span></span></div><div class="value accent" id="savingsRate">&mdash;</div><div class="sub" id="savingsRateSub">&mdash;</div></div>
+    <div class="metric-card"><div class="label">Pension Income <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">Guaranteed income in retirement</span>Combined DB and State pension income for both people. This money arrives regardless of your portfolio, so it directly reduces how much you need saved. More pension = lower FIRE number.</span></span></div><div class="value pink" id="pensionIncome">&mdash;</div><div class="sub" id="pensionIncomeSub">DB + State pensions combined</div></div>
+    <div class="metric-card"><div class="label">Bridge Risk <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">The Bridge</span>The gap between early retirement and when your pensions start. During this period you rely entirely on your ISA, GIA, and cash. This is the riskiest phase of any FIRE plan &mdash; if markets crash here, you can't easily go back to work.</span></span></div><div class="value" id="bridgeRisk">&mdash;</div><div class="sub" id="bridgeRiskSub">&mdash;</div></div>
+  </div>
+
+  <div class="fi-re-callout">
+    <div class="callout-item"><div class="callout-label">Financial Independence (FI) <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">FI vs RE &mdash; they're different!</span><strong>FI</strong> = could you stop working <em>today</em> and your money lasts? Compares your current portfolio to what you'd need right now. You can be FI but choose to keep working.</span></span></div><div class="callout-value" id="fiStatus">&mdash;</div><div class="callout-desc" id="fiStatusDesc"></div></div>
+    <div class="callout-item"><div class="callout-label">Retire Early (RE) <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">RE = Retire Early</span><strong>RE</strong> = will your <em>projected</em> portfolio at your target retirement age be enough? This factors in future contributions and growth. You can be on track for RE without being FI yet.</span></span></div><div class="callout-value" id="reStatus">&mdash;</div><div class="callout-desc" id="reStatusDesc"></div></div>
+  </div>
+
+  <!-- BRIDGE ANALYSIS -->
+  <div class="bridge-section" id="bridgeSection">
+    <div class="section-title">The Bridge <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">Why this matters</span>The bridge is the period between retiring early and your pensions starting. You must fund living costs from ISAs, GIAs, and cash alone. A market crash during this window is the single biggest risk to a FIRE plan because you're withdrawing, not contributing.</span></span></div>
+    <div class="section-sub" id="bridgeSubtitle">The gap between retirement and your pensions starting.</div>
+    <div class="bridge-summary-bar">
+      <div class="bridge-bar-track"><div class="bridge-bar-fill" id="bridgeBarFill" style="width:0%;background:linear-gradient(90deg,var(--accent),var(--green));"></div></div>
+      <div class="bridge-bar-label"><span id="bridgeBarLeft">Bridge funded: &mdash;</span><span id="bridgeBarRight">&mdash;</span></div>
+    </div>
+    <div class="bridge-phases" id="bridgePhases"></div>
+    <div class="bridge-stress" id="bridgeStress">
+      <div class="bs-title">Stress Testing &mdash; What if markets crash during your bridge?</div>
+      <div class="stress-grid" id="stressGrid"></div>
+    </div>
+  </div>
+
+  <div class="milestones-section">
+    <div class="section-title">FIRE Milestones</div>
+    <div class="section-sub">Hover for details. Coast FI = what you need <em>today</em>. Other targets = what you need <em>at retirement age</em>, compared to your projected portfolio.</div>
+    <div class="milestone-track"><div class="milestone-fill" id="milestoneFill"></div><div class="milestone-markers" id="milestoneMarkers"></div></div>
+    <div class="milestones-grid" id="milestonesGrid"></div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card"><div class="title">Building Your Portfolio</div><canvas id="projectionChart"></canvas></div>
+    <div class="chart-card"><div class="title">Current Asset Allocation</div><canvas id="allocationChart"></canvas></div>
+  </div>
+
+  <div class="breakdown-grid">
+    <div class="breakdown-card"><div class="title" id="p1BreakdownTitle">Person 1 &mdash; Account Balances</div><div id="p1Breakdown"></div></div>
+    <div class="breakdown-card"><div class="title" id="p2BreakdownTitle">Person 2 &mdash; Account Balances</div><div id="p2Breakdown"></div></div>
+  </div>
+
+  <div class="retirement-income">
+    <div class="title">Retirement Income Plan &mdash; By Spending Phase</div>
+    <div class="income-phases" id="incomePhases"></div>
+    <div class="spending-timeline"><div class="title">Annual Spending vs Pension Income Over Retirement</div><div style="position:relative;height:260px"><canvas id="spendingChart"></canvas></div></div>
+  </div>
+
+  <div class="chart-card" style="margin-bottom:24px"><div class="title" style="display:flex;justify-content:space-between;align-items:center;">How Long Does Your Money Last?<button type="button" class="add-btn" id="togglePensionBtn" style="margin:0;width:auto;padding:4px 12px;font-size:11px;">Hide Pensions</button></div><canvas id="drawdownChart"></canvas></div>
+
+  <div class="assumptions-note">
+    <strong>Important:</strong> This dashboard is for illustrative planning purposes only and does not constitute financial advice.
+    All figures are in today's money (real terms). Growth rates on individual accounts are nominal &mdash; the inflation assumption is used separately.
+    Tax rules, allowances, and state pension amounts are assumptions based on 2025/26 rates and may change.
+    DB pension values are estimates &mdash; check your annual benefit statements. The state pension figure assumes full qualifying years.
+    SIPP drawdowns: 25% tax-free, 75% taxed at the configured marginal rate (adjustable in Assumptions).
+    Pension access age assumed at 57 (rising from 55 in 2028). Consult a qualified financial adviser before making decisions.
+  </div>
+</div>
+</div>
+
+<script>
+// ===== WALKTHROUGH =====
+var WT_PAGES = [
+  {
+    title: 'Welcome to your FIRE Dashboard',
+    sub: 'A quick tour to get you started (you can replay this anytime)',
+    steps: [
+      { text: 'This dashboard helps you track your journey to <strong>Financial Independence / Retire Early</strong> (FIRE) in the UK.', detail: 'It calculates how much you need, how long it\'ll take, and the probability you\'ll make it.' },
+      { text: 'Everything runs <strong>in your browser</strong>. Your data stays on your device, saved automatically.', detail: 'You can export/import your data as a JSON file to back up or move between devices.' },
+      { text: 'Look for the <strong style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--border);font-size:10px;">?</strong> icons throughout the dashboard for explanations of any term or concept.', detail: '' }
+    ],
+    tip: 'Designed for UK tax wrappers (ISAs, SIPPs, DB pensions, State Pension). All figures are in today\'s money.'
+  },
+  {
+    title: 'Step 1: Enter Your Details',
+    sub: 'The sidebar on the left is where all your inputs live',
+    steps: [
+      { text: 'Start with <strong>General</strong> &mdash; set your target retirement age.', detail: '' },
+      { text: 'Enter your <strong>monthly expenses</strong> honestly (mortgage, bills, food, transport, etc.).', detail: 'Don\'t forget Large Annual Payments like holidays and car costs.' },
+      { text: 'Set up <strong>Retirement Spending Phases</strong> &mdash; how much you\'ll spend at each stage of retirement.', detail: 'Most people spend more early on (travel years) and less later. This drives your FIRE target number.' }
+    ],
+    tip: 'Fill in Person 1 first. If you\'re tracking as a couple, fill in Person 2 as well. Names are editable &mdash; just click them.'
+  },
+  {
+    title: 'Step 2: Add Your Money',
+    sub: 'For each person, enter current balances and monthly contributions',
+    steps: [
+      { text: '<strong>ISAs</strong> &mdash; your tax-free investments. Enter current balance, monthly contribution, and expected growth rate.', detail: '' },
+      { text: '<strong>SIPPs</strong> &mdash; your personal pension. Include employer contributions in the monthly amount.', detail: 'The dashboard models SIPP tax on withdrawal (25% tax-free, 75% at your marginal rate).' },
+      { text: '<strong>Pensions</strong> &mdash; if you have a DB pension or State Pension entitlement, enter the annual amount and the age it starts.', detail: 'These reduce how much you need from your portfolio &mdash; they\'re very valuable!' }
+    ],
+    tip: 'Each account can have its own growth rate. Use higher rates for equity-heavy ISAs, lower for bond-heavy SIPPs if you like.'
+  },
+  {
+    title: 'Step 3: Read Your Dashboard',
+    sub: 'The main panel shows your results, updated live as you type',
+    steps: [
+      { text: 'The <strong>top cards</strong> show your key numbers: RE target, net worth, progress, earliest retirement date, savings rate, and bridge risk.', detail: '' },
+      { text: 'The <strong>FI vs RE</strong> box shows two different questions: "Could I stop today?" (FI) vs "Am I on track for my target age?" (RE).', detail: '' },
+      { text: '<strong>The Bridge</strong> section shows the riskiest part of your FIRE plan &mdash; the gap between retiring early and your pensions starting.', detail: 'It stress-tests your bridge against historical crashes (2008 GFC, 2000 dot-com) so you can see how your plan holds up in bad markets.' },
+      { text: '<strong>FIRE Milestones</strong> show your progress toward Lean, Comfortable, Fat FIRE, and Coast FI &mdash; each with a Monte Carlo probability.', detail: '' }
+    ],
+    tip: 'Pay close attention to the Bridge section. If your bridge survival drops below 80% under stress scenarios, consider building a larger cash buffer or planning a later retirement age.'
+  }
+];
+
+var wtPage = 0;
+function wtRender() {
+  var p = WT_PAGES[wtPage];
+  var h = '<h2>' + p.title + '</h2><div class="wt-sub">' + p.sub + '</div>';
+  for (var i = 0; i < p.steps.length; i++) {
+    h += '<div class="wt-step"><span class="wt-step-num">' + (i+1) + '</span><span class="wt-step-text">' + p.steps[i].text + '</span>';
+    if (p.steps[i].detail) h += '<div class="wt-step-detail">' + p.steps[i].detail + '</div>';
+    h += '</div>';
+  }
+  if (p.tip) h += '<div class="wt-tip">' + p.tip + '</div>';
+  document.getElementById('wtContent').innerHTML = h;
+  document.getElementById('wtBack').style.display = wtPage === 0 ? 'none' : '';
+  document.getElementById('wtNext').textContent = wtPage === WT_PAGES.length - 1 ? 'Get Started' : 'Next';
+  var dots = '';
+  for (var d = 0; d < WT_PAGES.length; d++) dots += '<div class="wt-dot' + (d === wtPage ? ' active' : '') + '"></div>';
+  document.getElementById('wtDots').innerHTML = dots;
+}
+function wtNav(dir) {
+  wtPage += dir;
+  if (wtPage >= WT_PAGES.length) { closeWalkthrough(); return; }
+  if (wtPage < 0) wtPage = 0;
+  wtRender();
+}
+function showWalkthrough() {
+  wtPage = 0;
+  wtRender();
+  document.getElementById('walkthrough').style.display = 'flex';
+}
+function closeWalkthrough() {
+  document.getElementById('walkthrough').style.display = 'none';
+  try { localStorage.setItem('fire-walkthrough-seen', '1'); } catch(e) {}
+}
+
+// ===== GLOBAL FUNCTIONS FOR MOBILE (must be at top for onclick handlers) =====
+function toggleSidebar() {
+  var sb = document.getElementById('sidebar');
+  if (!sb) return;
+  if (sb.classList.contains('open')) { closeSidebar(); } else { openSidebar(); }
+}
+function openSidebar() {
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebarOverlay');
+  var btn = document.getElementById('menuToggle');
+  if (sb) sb.classList.add('open');
+  if (ov) ov.classList.add('active');
+  if (btn) btn.textContent = '\u00d7';
+}
+function closeSidebar() {
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebarOverlay');
+  var btn = document.getElementById('menuToggle');
+  if (sb) sb.classList.remove('open');
+  if (ov) ov.classList.remove('active');
+  if (btn) btn.textContent = '\u2630';
+}
+function toggleTheme() {
+  var isLight = document.documentElement.classList.contains('light');
+  setTheme(isLight ? 'dark' : 'light');
+}
+
+// ===== UTILS =====
+var G = function(id) { return document.getElementById(id); };
+var num = function(id) { return parseFloat(G(id).value) || 0; };
+var fmt = function(n) { return '\u00a3' + Math.round(n).toLocaleString('en-GB'); };
+var fmtK = function(n) { return n >= 1000000 ? '\u00a3' + (n/1000000).toFixed(2) + 'M' : n >= 1000 ? '\u00a3' + (n/1000).toFixed(0) + 'k' : fmt(n); };
+var escHtml = function(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+G('currentDate').textContent = new Date().toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+// ===== SAVE / LOAD =====
+var STORAGE_KEY = 'fire-dashboard-state';
+var INPUT_IDS = ['retireAge','includeProperty','propertyValue','mortgageBalance','expMortgage','mortgageEndYear','expBills','expFood','expTransport','expInsurance','expOther','p1Name','p1Age','p1Income','p1ISA','p1ISAContrib','p1ISAGrowth','p1SIPP','p1SIPPContrib','p1SIPPGrowth','p1GIA','p1GIAContrib','p1GIAGrowth','p1Cash','p1DB','p1DBAge','p1SP','p1SPAge','p1LumpAmount','p1LumpAge','p1LumpConf','p2Name','p2Age','p2Income','p2ISA','p2ISAContrib','p2ISAGrowth','p2SIPP','p2SIPPContrib','p2SIPPGrowth','p2GIA','p2GIAContrib','p2GIAGrowth','p2Cash','p2DB','p2DBAge','p2SP','p2SPAge','p2LumpAmount','p2LumpAge','p2LumpConf','leanMult','comfMult','fatMult','realReturn','inflation','volatility','pensionAccessAge','sippTaxRate'];
+
+function gatherState() {
+  var inputs = {};
+  INPUT_IDS.forEach(function(id) { var el = G(id); inputs[id] = el.type === 'range' ? parseFloat(el.value) : el.value; });
+  return { inputs: inputs, annualPayments: annualPayments, spendingPhases: spendingPhases, version: 1 };
+}
+
+function applyState(state) {
+  if (!state) return false;
+  try {
+    if (state.inputs) INPUT_IDS.forEach(function(id) { if (state.inputs[id] !== undefined) G(id).value = state.inputs[id]; });
+    if (state.annualPayments) annualPayments = state.annualPayments;
+    if (state.spendingPhases && state.spendingPhases.length) spendingPhases = state.spendingPhases;
+    return true;
+  } catch(e) { console.warn('Failed to apply state:', e); return false; }
+}
+
+function saveToStorage() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(gatherState())); showSaveStatus(); } catch(e) {}
+}
+function loadFromStorage() {
+  try { var raw = localStorage.getItem(STORAGE_KEY); return raw ? applyState(JSON.parse(raw)) : false; } catch(e) { return false; }
+}
+function showSaveStatus() {
+  var el = G('saveStatus'); el.style.opacity = '1';
+  clearTimeout(el._timeout);
+  el._timeout = setTimeout(function() { el.style.opacity = '0'; }, 1200);
+}
+
+G('exportBtn').addEventListener('click', function() {
+  var data = JSON.stringify(gatherState(), null, 2);
+  var blob = new Blob([data], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href = url;
+  a.download = 'fire-dashboard-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click(); URL.revokeObjectURL(url);
+});
+G('importBtn').addEventListener('click', function() { G('importFile').click(); });
+G('importFile').addEventListener('change', function(e) {
+  var file = e.target.files[0]; if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      var state = JSON.parse(ev.target.result);
+      if (applyState(state)) { renderAnnualPayments(); renderSpendingPhases(); updateRD(); setupListeners(); calculate(); saveToStorage(); }
+      else { alert('Invalid dashboard file.'); }
+    } catch(err) { alert('Could not read file: ' + err.message); }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+// ===== NET WORTH TOGGLE =====
+var nwShowTotal = false;
+G('nwCard').addEventListener('click', function() { nwShowTotal = !nwShowTotal; calculate(); });
+var showPensionOnDrawdown = true;
+G('togglePensionBtn').addEventListener('click', function() {
+  showPensionOnDrawdown = !showPensionOnDrawdown;
+  G('togglePensionBtn').textContent = showPensionOnDrawdown ? 'Hide Pensions' : 'Show Pensions';
+  calculate();
+});
+
+// ===== ANNUAL PAYMENTS =====
+var annualPayments = [
+  { desc: 'Holidays', amount: 0 },
+  { desc: 'Car costs', amount: 0 },
+  { desc: 'Home maintenance', amount: 0 }
+];
+
+function renderAnnualPayments() {
+  var c = G('annualPayments'); c.innerHTML = '';
+  annualPayments.forEach(function(item, i) {
+    var row = document.createElement('div'); row.className = 'annual-row';
+    row.innerHTML = '<input type="text" class="ap-desc" data-i="'+i+'" value="'+escHtml(item.desc)+'">' +
+      '<input type="number" class="ap-amount" data-i="'+i+'" value="'+item.amount+'" step="100">' +
+      '<button class="remove-btn" data-i="'+i+'" title="Remove">&times;</button>';
+    c.appendChild(row);
+  });
+  c.querySelectorAll('.ap-desc').forEach(function(el) { el.addEventListener('input', function(e) { annualPayments[+e.target.dataset.i].desc = e.target.value; saveToStorage(); }); });
+  c.querySelectorAll('.ap-amount').forEach(function(el) { el.addEventListener('input', function(e) { annualPayments[+e.target.dataset.i].amount = parseFloat(e.target.value)||0; calculate(); saveToStorage(); }); });
+  c.querySelectorAll('.remove-btn').forEach(function(el) { el.addEventListener('click', function(e) { annualPayments.splice(+e.target.dataset.i, 1); renderAnnualPayments(); calculate(); saveToStorage(); }); });
+}
+G('addAnnualBtn').addEventListener('click', function() { annualPayments.push({desc:'New item', amount:0}); renderAnnualPayments(); saveToStorage(); });
+
+// ===== SPENDING PHASES =====
+var spendingPhases = [
+  { fromAge: 60, toAge: 70, amount: 30000 },
+  { fromAge: 70, toAge: 80, amount: 25000 },
+  { fromAge: 80, toAge: 95, amount: 20000 }
+];
+
+function renderSpendingPhases() {
+  var c = G('spendingPhases'); c.innerHTML = '';
+  spendingPhases.forEach(function(p, i) {
+    var row = document.createElement('div'); row.className = 'phase-row';
+    row.innerHTML = '<input type="number" class="ph-from" data-i="'+i+'" value="'+p.fromAge+'" min="40" max="100">' +
+      '<input type="number" class="ph-to" data-i="'+i+'" value="'+p.toAge+'" min="40" max="100">' +
+      '<input type="number" class="ph-amt" data-i="'+i+'" value="'+p.amount+'" step="1000">' +
+      '<button class="remove-btn" data-i="'+i+'">&times;</button>';
+    c.appendChild(row);
+  });
+  c.querySelectorAll('.ph-from').forEach(function(el) { el.addEventListener('input', function(e) { spendingPhases[+e.target.dataset.i].fromAge = +e.target.value||0; calculate(); saveToStorage(); }); });
+  c.querySelectorAll('.ph-to').forEach(function(el) { el.addEventListener('input', function(e) { spendingPhases[+e.target.dataset.i].toAge = +e.target.value||0; calculate(); saveToStorage(); }); });
+  c.querySelectorAll('.ph-amt').forEach(function(el) { el.addEventListener('input', function(e) { spendingPhases[+e.target.dataset.i].amount = +e.target.value||0; calculate(); saveToStorage(); }); });
+  c.querySelectorAll('.remove-btn').forEach(function(el) { el.addEventListener('click', function(e) { if(spendingPhases.length>1){spendingPhases.splice(+e.target.dataset.i,1); renderSpendingPhases(); calculate(); saveToStorage();} }); });
+}
+G('addPhaseBtn').addEventListener('click', function() {
+  var last = spendingPhases[spendingPhases.length-1];
+  spendingPhases.push({fromAge: last?last.toAge:60, toAge:(last?last.toAge:60)+10, amount:last?last.amount:25000});
+  renderSpendingPhases(); calculate(); saveToStorage();
+});
+
+function getSpendingForAge(age) {
+  for (var i=0; i<spendingPhases.length; i++) { var p=spendingPhases[i]; if (age >= p.fromAge && age < p.toAge) return p.amount; }
+  if (spendingPhases.length && age >= spendingPhases[spendingPhases.length-1].fromAge) return spendingPhases[spendingPhases.length-1].amount;
+  if (spendingPhases.length) return spendingPhases[0].amount;
+  return 40000;
+}
+
+// ===== CHARTS =====
+var projChart, allocChart, drawChart, spendChart;
+function initCharts() {
+  if (typeof Chart === 'undefined') { console.warn('Chart.js not loaded'); return; }
+  Chart.defaults.color = '#8b8fa3'; Chart.defaults.borderColor = '#2a2e3d';
+  var lo = function() { return { responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+    plugins:{legend:{position:'bottom',labels:{boxWidth:12,padding:16,font:{size:11}}},tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+fmt(c.parsed.y);}}}},
+    scales:{x:{grid:{display:false},ticks:{font:{size:11}}},y:{ticks:{callback:function(v){return fmtK(v);},font:{size:11}},grid:{color:getCSS('--chart-grid')}}} }; };
+  projChart = new Chart(G('projectionChart'),{type:'line',data:{labels:[],datasets:[]},options:lo()});
+  drawChart = new Chart(G('drawdownChart'),{type:'line',data:{labels:[],datasets:[]},options:lo()});
+  allocChart = new Chart(G('allocationChart'),{type:'doughnut',data:{labels:[],datasets:[]},options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:10,font:{size:11}}},tooltip:{callbacks:{label:function(c){return c.label+': '+fmt(c.parsed);}}}}}});
+  spendChart = new Chart(G('spendingChart'),{type:'bar',data:{labels:[],datasets:[]},options:Object.assign(lo(),{scales:{x:{grid:{display:false},ticks:{font:{size:11}},stacked:true},y:{ticks:{callback:function(v){return fmtK(v);},font:{size:11}},grid:{color:getCSS('--chart-grid')},stacked:true}}})});
+}
+
+// ===== CORE =====
+function sippGrossUp(taxRate) { return taxRate > 0 ? 1 / (1 - 0.75 * taxRate) : 1; }
+
+function portfolioNeededAtAge(startAge, endAge, rr, getPen, mult, getExpForAge, sippFrac, sippTax) {
+  sippFrac = sippFrac || 0; sippTax = sippTax || 0;
+  var grossUp = sippFrac * sippGrossUp(sippTax) + (1 - sippFrac) * 1.0;
+  var needed = 0;
+  for (var age = endAge-1; age >= startAge; age--) {
+    var spend = age < spendingPhases[0].fromAge ? getExpForAge(age)*12 : getSpendingForAge(age);
+    spend *= mult;
+    var net = Math.max(0, spend - getPen(age));
+    var grossNet = net * grossUp;
+    needed = (needed + grossNet) / (1 + rr);
+  }
+  return needed;
+}
+
+// ===== MONTE CARLO =====
+function randNormal() {
+  var u=0,v=0; while(u===0)u=Math.random(); while(v===0)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+
+function monteCarloProb(accounts, target, maxYears, vol, inflRate, lumps) {
+  lumps = lumps || [];
+  var RUNS = 1000, hits = 0;
+  for (var r = 0; r < RUNS; r++) {
+    var bals = accounts.map(function(a) { return a.bal; });
+    var lumpOccurs = lumps.map(function(l) { return Math.random() < l.confidence; });
+    var reached = false;
+    for (var y = 0; y < maxYears && !reached; y++) {
+      var total = 0;
+      for (var i = 0; i < accounts.length; i++) {
+        var a = accounts[i];
+        var realMean = (1 + a.growth) / (1 + inflRate) - 1;
+        var yearReturn = realMean + vol * randNormal();
+        bals[i] = Math.max(0, bals[i] * (1 + yearReturn) + a.contrib * 12);
+        total += bals[i];
+      }
+      lumps.forEach(function(l,li) { if (lumpOccurs[li] && y === l.year) { bals[0] += l.amount; total += l.amount; } });
+      if (total >= target) reached = true;
+    }
+    if (reached) hits++;
+  }
+  return Math.round(hits / RUNS * 100);
+}
+
+function calculate() {
+  var retireAge = num('retireAge');
+  var propVal = num('propertyValue'), mortBal = num('mortgageBalance'), inclProp = G('includeProperty').value;
+  var p1Name = G('p1Name').value||'Person 1', p2Name = G('p2Name').value||'Person 2';
+  var p1Age = num('p1Age'), p2Age = num('p2Age');
+  var p1Inc = num('p1Income'), p2Inc = num('p2Income');
+  var p1ISA = num('p1ISA'), p2ISA = num('p2ISA');
+  var p1SIPP = num('p1SIPP'), p2SIPP = num('p2SIPP');
+  var p1GIA = num('p1GIA'), p2GIA = num('p2GIA');
+  var p1Cash = num('p1Cash'), p2Cash = num('p2Cash');
+  var p1ISAc = num('p1ISAContrib'), p2ISAc = num('p2ISAContrib');
+  var p1SIPPc = num('p1SIPPContrib'), p2SIPPc = num('p2SIPPContrib');
+  var p1GIAc = num('p1GIAContrib'), p2GIAc = num('p2GIAContrib');
+  var p1ISAg = num('p1ISAGrowth')/100, p2ISAg = num('p2ISAGrowth')/100;
+  var p1SIPPg = num('p1SIPPGrowth')/100, p2SIPPg = num('p2SIPPGrowth')/100;
+  var p1GIAg = num('p1GIAGrowth')/100, p2GIAg = num('p2GIAGrowth')/100;
+  var inflationRate = num('inflation')/100;
+  var p1DB = num('p1DB'), p1DBAge = num('p1DBAge'), p1SP = num('p1SP'), p1SPAge = num('p1SPAge');
+  var p2DB = num('p2DB'), p2DBAge = num('p2DBAge'), p2SP = num('p2SP'), p2SPAge = num('p2SPAge');
+  var realReturn = num('realReturn')/100;
+  var sippTaxRate = num('sippTaxRate')/100;
+  var volatilityPct = num('volatility')/100;
+  var ageDiff = p1Age - p2Age;
+  var retirementEnd = 95;
+  var p1LumpAmt = num('p1LumpAmount'), p1LumpAge = num('p1LumpAge'), p1LumpConf = num('p1LumpConf')/100;
+  var p2LumpAmt = num('p2LumpAmount'), p2LumpAge = num('p2LumpAge'), p2LumpConf = num('p2LumpConf')/100;
+  var p2LumpAgeAsP1 = p2LumpAge + ageDiff;
+  var p1LumpEff = p1LumpAmt * p1LumpConf;
+  var p2LumpEff = p2LumpAmt * p2LumpConf;
+
+  var mortgageMonthly = num('expMortgage');
+  var mortgageEndYear = num('mortgageEndYear');
+  var currentYear = new Date().getFullYear();
+  var mortgageEndAge = p1Age + Math.max(0, mortgageEndYear - currentYear);
+  var monthlyExpBase = num('expBills') + num('expFood') + num('expTransport') + num('expInsurance') + num('expOther');
+  var monthlyExp = mortgageMonthly + monthlyExpBase;
+  var annualPayTotal = annualPayments.reduce(function(s,a) { return s + a.amount; }, 0);
+  var totalMonthlyOutgoings = monthlyExp + annualPayTotal/12;
+
+  function getMonthlyExpForAge(p1CurAge) {
+    return (p1CurAge < mortgageEndAge ? mortgageMonthly : 0) + monthlyExpBase + annualPayTotal/12;
+  }
+
+  var mortYearsLeft = Math.max(0, mortgageEndYear - currentYear);
+  G('totalMonthlyExp').textContent = fmt(monthlyExp) + '/mo' + (mortYearsLeft > 0 ? ' (mortgage ends ' + mortgageEndYear + ')' : '');
+  G('totalAnnualPay').textContent = fmt(annualPayTotal) + ' (' + fmt(Math.round(annualPayTotal/12)) + '/mo)';
+
+  var totalMonthlyIncome = p1Inc + p2Inc;
+  var totalMonthlyContrib = p1ISAc + p2ISAc + p1SIPPc + p2SIPPc + p1GIAc + p2GIAc;
+  var monthlySurplus = totalMonthlyIncome - totalMonthlyOutgoings - totalMonthlyContrib;
+  var annualContrib = totalMonthlyContrib * 12;
+  var totalInvestable = p1ISA + p2ISA + p1SIPP + p2SIPP + p1GIA + p2GIA;
+  var totalCash = p1Cash + p2Cash;
+  var propComp = 0;
+  if (inclProp==='equity') propComp = propVal - mortBal;
+  else if (inclProp==='full') propComp = propVal;
+
+  function getPensionForAge(p1CurAge) {
+    var p = 0; var partnerAge = p1CurAge - ageDiff;
+    if (p1CurAge >= p1DBAge) p += p1DB; if (p1CurAge >= p1SPAge) p += p1SP;
+    if (partnerAge >= p2DBAge) p += p2DB; if (partnerAge >= p2SPAge) p += p2SP;
+    return p;
+  }
+  var totalPensionIncome = p1DB + p2DB + p1SP + p2SP;
+  var totalSIPP = p1SIPP + p2SIPP;
+  var sippFrac = totalInvestable > 0 ? totalSIPP / totalInvestable : 0;
+  var yearsToRetire = Math.max(0, retireAge - p1Age);
+  var fiAtRetirement = portfolioNeededAtAge(retireAge, retirementEnd, realReturn, getPensionForAge, 1.0, getMonthlyExpForAge, sippFrac, sippTaxRate);
+  var coastTarget = fiAtRetirement / Math.pow(1+realReturn, yearsToRetire);
+  var isCoastFI = totalInvestable >= coastTarget;
+
+  var leanMult = num('leanMult') || 0.7;
+  var comfMult = num('comfMult') || 1.25;
+  var fatMult = num('fatMult') || 1.5;
+  var leanAtRetire = portfolioNeededAtAge(retireAge, retirementEnd, realReturn, getPensionForAge, leanMult, getMonthlyExpForAge, sippFrac, sippTaxRate);
+  var fiAtRetire = fiAtRetirement;
+  var comfAtRetire = portfolioNeededAtAge(retireAge, retirementEnd, realReturn, getPensionForAge, comfMult, getMonthlyExpForAge, sippFrac, sippTaxRate);
+  var fatAtRetire = portfolioNeededAtAge(retireAge, retirementEnd, realReturn, getPensionForAge, fatMult, getMonthlyExpForAge, sippFrac, sippTaxRate);
+
+  // Years to RE sim
+  var sim = {p1ISA:p1ISA, p2ISA:p2ISA, p1SIPP:p1SIPP, p2SIPP:p2SIPP, p1GIA:p1GIA, p2GIA:p2GIA};
+  var yearsToRE = -1, reAge = -1, projectedAtRetire = 0;
+  for (var y = 0; y <= 40; y++) {
+    var ageY = p1Age + y;
+    if (y > 0 && ageY === p1LumpAge && p1LumpEff > 0) sim.p1ISA += p1LumpEff;
+    if (y > 0 && ageY === p2LumpAgeAsP1 && p2LumpEff > 0) sim.p2ISA += p2LumpEff;
+    var total = sim.p1ISA+sim.p2ISA+sim.p1SIPP+sim.p2SIPP+sim.p1GIA+sim.p2GIA;
+    if (ageY === retireAge) projectedAtRetire = total;
+    var simSIPP = sim.p1SIPP + sim.p2SIPP;
+    var simSippFrac = total > 0 ? simSIPP / total : 0;
+    var neededY = portfolioNeededAtAge(ageY, retirementEnd, realReturn, getPensionForAge, 1.0, getMonthlyExpForAge, simSippFrac, sippTaxRate);
+    if (total >= neededY) { yearsToRE = y; reAge = ageY; break; }
+    var r1i=(1+p1ISAg)/(1+inflationRate)-1, r2i=(1+p2ISAg)/(1+inflationRate)-1;
+    var r1s=(1+p1SIPPg)/(1+inflationRate)-1, r2s=(1+p2SIPPg)/(1+inflationRate)-1;
+    var r1g=(1+p1GIAg)/(1+inflationRate)-1, r2g=(1+p2GIAg)/(1+inflationRate)-1;
+    var stillWorking = ageY < retireAge;
+    sim.p1ISA = sim.p1ISA*(1+r1i) + (stillWorking ? p1ISAc*12 : 0); sim.p2ISA = sim.p2ISA*(1+r2i) + (stillWorking ? p2ISAc*12 : 0);
+    sim.p1SIPP = sim.p1SIPP*(1+r1s) + (stillWorking ? p1SIPPc*12 : 0); sim.p2SIPP = sim.p2SIPP*(1+r2s) + (stillWorking ? p2SIPPc*12 : 0);
+    sim.p1GIA = sim.p1GIA*(1+r1g) + (stillWorking ? p1GIAc*12 : 0); sim.p2GIA = sim.p2GIA*(1+r2g) + (stillWorking ? p2GIAc*12 : 0);
+  }
+  if (retireAge <= p1Age) projectedAtRetire = totalInvestable;
+  else if (projectedAtRetire === 0) projectedAtRetire = sim.p1ISA+sim.p2ISA+sim.p1SIPP+sim.p2SIPP+sim.p1GIA+sim.p2GIA;
+
+  // ===== UI =====
+  G('p1BreakdownTitle').textContent = p1Name + ' \u2014 Account Balances';
+  G('p2BreakdownTitle').textContent = p2Name + ' \u2014 Account Balances';
+  G('reNumber').textContent = fmt(fiAtRetire);
+  G('reSub').textContent = 'Portfolio needed at age ' + retireAge + ' (FI target)';
+  var totalNetWorth = totalInvestable + totalCash + (propVal - mortBal);
+  if (nwShowTotal) {
+    G('nwLabel').textContent = 'Total Net Worth';
+    G('netWorth').textContent = fmt(totalNetWorth);
+    G('nwSub').textContent = 'Investments ' + fmt(totalInvestable) + ' + Cash ' + fmt(totalCash) + ' + Property equity ' + fmt(propVal - mortBal);
+  } else {
+    G('nwLabel').textContent = 'Investable Net Worth';
+    G('netWorth').textContent = fmt(totalInvestable);
+    G('nwSub').textContent = 'Investable assets (excl. property & cash)';
+  }
+  var progressPercent = fiAtRetire > 0 ? Math.min(100, projectedAtRetire/fiAtRetire*100) : 0;
+  G('rePercent').textContent = progressPercent.toFixed(1) + '%';
+  G('rePercentSub').textContent = 'Projected ' + fmt(projectedAtRetire) + ' of ' + fmt(fiAtRetire) + ' needed at ' + retireAge;
+
+  if (yearsToRE >= 0) {
+    G('reDate').textContent = (new Date().getFullYear()+yearsToRE) + ' (age ' + reAge + ')';
+    G('reDateSub').textContent = yearsToRE===0 ? 'You could RE now!' : yearsToRE + (yearsToRE===1?' year':' years') + ' from now';
+  } else { G('reDate').textContent = '>40 yrs'; G('reDateSub').textContent = 'Increase savings or adjust spending'; }
+
+  G('monthlySurplus').textContent = fmt(monthlySurplus);
+  G('surplusSub').textContent = 'After expenses (' + fmt(totalMonthlyOutgoings) + '/mo) & investing (' + fmt(totalMonthlyContrib) + '/mo)';
+  var savingsRate = totalMonthlyIncome > 0 ? (totalMonthlyContrib / totalMonthlyIncome * 100) : 0;
+  G('savingsRate').textContent = savingsRate.toFixed(1) + '%';
+  G('savingsRateSub').textContent = fmt(totalMonthlyContrib) + '/mo of ' + fmt(totalMonthlyIncome) + '/mo income';
+  G('pensionIncome').textContent = fmt(totalPensionIncome) + '/yr';
+  var penAges = [];
+  if (p1DB > 0) penAges.push(p1DBAge);
+  if (p1SP > 0) penAges.push(p1SPAge);
+  if (p2DB > 0) penAges.push(p2DBAge + ageDiff);
+  if (p2SP > 0) penAges.push(p2SPAge + ageDiff);
+  if (penAges.length > 0) {
+    var earliestPenAge = Math.min.apply(null, penAges);
+    var latestPenAge = Math.max.apply(null, penAges);
+    G('pensionIncomeSub').textContent = 'DB + State pensions (from age ' + earliestPenAge + (earliestPenAge !== latestPenAge ? '\u2013' + latestPenAge : '') + ')';
+  } else {
+    G('pensionIncomeSub').textContent = 'No pensions entered yet';
+  }
+
+  if (isCoastFI) {
+    G('fiStatus').innerHTML = '<span class="green">Achieved</span>';
+    G('fiStatusDesc').textContent = 'You could stop saving today. Your ' + fmt(totalInvestable) + ' grows to ' + fmt(fiAtRetirement) + ' by age ' + retireAge + '.';
+  } else {
+    G('fiStatus').innerHTML = '<span class="orange">' + fmt(coastTarget-totalInvestable) + ' away</span>';
+    G('fiStatusDesc').textContent = 'Need ' + fmt(coastTarget) + ' today to grow to ' + fmt(fiAtRetirement) + ' by age ' + retireAge + ' without saving.';
+  }
+  if (yearsToRE===0) { G('reStatus').innerHTML = '<span class="green">Ready now!</span>'; G('reStatusDesc').textContent = 'Your portfolio funds your spending plan from today to age '+retirementEnd+'.'; }
+  else if (yearsToRE>0) { G('reStatus').innerHTML = '<span class="orange">Age '+reAge+' ('+yearsToRE+'yrs)</span>'; G('reStatusDesc').textContent = 'With '+fmt(annualContrib)+'/yr investing, you can walk away at age '+reAge+'.'; }
+  else { G('reStatus').innerHTML = '<span class="red">Not yet on track</span>'; G('reStatusDesc').textContent = 'RE is beyond projection window. Adjust spending or contributions.'; }
+
+  // ===== COMPUTE PROJECTED BALANCES AT RETIREMENT (needed by bridge + drawdown) =====
+  var retireISA = p1ISA+p2ISA, retireSIPP = p1SIPP+p2SIPP, retireGIA = p1GIA+p2GIA;
+  (function() {
+    var s1i=p1ISA,s2i=p2ISA,s1s=p1SIPP,s2s=p2SIPP,s1g=p1GIA,s2g=p2GIA;
+    for (var y=0; y<=yearsToRetire; y++) {
+      var age = p1Age + y;
+      if (y>0 && age===p1LumpAge && p1LumpEff>0) s1i+=p1LumpEff;
+      if (y>0 && age===p2LumpAgeAsP1 && p2LumpEff>0) s2i+=p2LumpEff;
+      if (age===retireAge) { retireISA=s1i+s2i; retireSIPP=s1s+s2s; retireGIA=s1g+s2g; }
+      var rI1=(1+p1ISAg)/(1+inflationRate)-1, rI2=(1+p2ISAg)/(1+inflationRate)-1;
+      var rS1=(1+p1SIPPg)/(1+inflationRate)-1, rS2=(1+p2SIPPg)/(1+inflationRate)-1;
+      var rG1=(1+p1GIAg)/(1+inflationRate)-1, rG2=(1+p2GIAg)/(1+inflationRate)-1;
+      s1i=s1i*(1+rI1)+p1ISAc*12; s2i=s2i*(1+rI2)+p2ISAc*12;
+      s1s=s1s*(1+rS1)+p1SIPPc*12; s2s=s2s*(1+rS2)+p2SIPPc*12;
+      s1g=s1g*(1+rG1)+p1GIAc*12; s2g=s2g*(1+rG2)+p2GIAc*12;
+    }
+  })();
+
+  // ===== BRIDGE ANALYSIS =====
+  var pensionAccessAge = num('pensionAccessAge');
+  var sippGU = sippGrossUp(sippTaxRate);
+
+  // The bridge = retirement age → SIPP access age (the true risk window)
+  var bridgeDuration = Math.max(0, pensionAccessAge - retireAge);
+
+  // Find earliest state pension age (for the third phase card)
+  var earliestSPAge = 99;
+  if (p1SP > 0 && p1SPAge < earliestSPAge) earliestSPAge = p1SPAge;
+  if (p2SP > 0 && (p2SPAge + ageDiff) < earliestSPAge) earliestSPAge = p2SPAge + ageDiff;
+  if (earliestSPAge === 99) earliestSPAge = 0; // no state pension entered
+
+  // Build three phases for display
+  var bridgePhaseData = [];
+
+  // Phase 1: FIRE Phase (retirement → SIPP access) — THE BRIDGE
+  if (bridgeDuration > 0) {
+    var fireSpend = 0, firePension = 0;
+    for (var bAge = retireAge; bAge < pensionAccessAge; bAge++) {
+      fireSpend += getSpendingForAge(bAge);
+      firePension += getPensionForAge(bAge);
+    }
+    bridgePhaseData.push({
+      name: 'FIRE Phase', fromAge: retireAge, toAge: pensionAccessAge,
+      years: bridgeDuration, spend: fireSpend, pension: firePension,
+      gap: Math.max(0, fireSpend - firePension),
+      sources: ['GIA', 'ISA', 'Cash'], isBridge: true
+    });
+  }
+
+  // Phase 2: SIPP Phase (SIPP access → earliest state pension)
+  var sippPhaseEnd = earliestSPAge > pensionAccessAge ? earliestSPAge : 0;
+  if (sippPhaseEnd > 0 && sippPhaseEnd > Math.max(retireAge, pensionAccessAge)) {
+    var sippStart = Math.max(retireAge, pensionAccessAge);
+    var sippYears = sippPhaseEnd - sippStart;
+    var sippSpend = 0, sippPension = 0;
+    for (var bAge = sippStart; bAge < sippPhaseEnd; bAge++) {
+      sippSpend += getSpendingForAge(bAge);
+      sippPension += getPensionForAge(bAge);
+    }
+    bridgePhaseData.push({
+      name: 'SIPP Phase', fromAge: sippStart, toAge: sippPhaseEnd,
+      years: sippYears, spend: sippSpend, pension: sippPension,
+      gap: Math.max(0, sippSpend - sippPension),
+      sources: ['GIA', 'ISA', 'SIPP (taxed)'], isBridge: false
+    });
+  }
+
+  // Phase 3: State Pension Phase (state pension onwards, show first 10 years)
+  var spStart = earliestSPAge > 0 ? Math.max(retireAge, earliestSPAge) : 0;
+  if (spStart > 0) {
+    var spEnd = Math.min(retirementEnd, spStart + 10);
+    var spYears = spEnd - spStart;
+    var spSpend = 0, spPension = 0;
+    for (var bAge = spStart; bAge < spEnd; bAge++) {
+      spSpend += getSpendingForAge(bAge);
+      spPension += getPensionForAge(bAge);
+    }
+    bridgePhaseData.push({
+      name: 'State Pension Phase', fromAge: spStart, toAge: spEnd,
+      years: spYears, spend: spSpend, pension: spPension,
+      gap: Math.max(0, spSpend - spPension),
+      sources: ['State Pension', 'DB Pension', 'SIPP', 'ISA', 'GIA'], isBridge: false
+    });
+  }
+
+  // Bridge cost = only the FIRE phase (pre-SIPP)
+  var totalBridgeCost = bridgePhaseData.length > 0 && bridgePhaseData[0].isBridge ? bridgePhaseData[0].gap : 0;
+
+  // Available bridge funding at retirement (ISA + GIA + cash only — no SIPP)
+  var bridgeCash = p1Cash + p2Cash;
+  var preSIPPfunding = retireISA + retireGIA + bridgeCash;
+  var bridgeFundedPct = totalBridgeCost > 0 ? Math.min(100, preSIPPfunding / totalBridgeCost * 100) : (bridgeDuration === 0 ? 100 : 0);
+
+  // Bridge Monte Carlo — simulate ONLY the FIRE phase (retirement → SIPP access)
+  function bridgeMonteCarlo(vol, nomReturn) {
+    if (bridgeDuration <= 0) return 100;
+    var RUNS = 1000;
+    var survived = 0;
+    for (var r = 0; r < RUNS; r++) {
+      var bISA = retireISA;
+      var bGIA = retireGIA;
+      var bCash = bridgeCash;
+      var failed = false;
+      for (var y = 0; y < bridgeDuration; y++) {
+        var bAge = retireAge + y;
+        var u1 = Math.random(), u2 = Math.random();
+        var z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+        var realR = (1 + nomReturn) / (1 + inflationRate) - 1;
+        var yearReturn = realR + vol * z;
+        bISA *= (1 + yearReturn);
+        bGIA *= (1 + yearReturn);
+        // No SIPP access during bridge — that's the whole point
+        if (bAge === p1LumpAge && p1LumpEff > 0) bISA += p1LumpEff;
+        if (bAge === p2LumpAgeAsP1 && p2LumpEff > 0) bISA += p2LumpEff;
+        var spend = getSpendingForAge(bAge);
+        var pension = getPensionForAge(bAge);
+        var draw = Math.max(0, spend - pension);
+        if (draw > 0 && bGIA > 0) { var t = Math.min(draw, bGIA); bGIA -= t; draw -= t; }
+        if (draw > 0 && bISA > 0) { var t = Math.min(draw, bISA); bISA -= t; draw -= t; }
+        if (draw > 0 && bCash > 0) { var t = Math.min(draw, bCash); bCash -= t; draw -= t; }
+        if (draw > 1) { failed = true; break; }
+        bISA = Math.max(0, bISA); bGIA = Math.max(0, bGIA);
+      }
+      if (!failed) survived++;
+    }
+    return Math.round(survived / RUNS * 100);
+  }
+
+  // Stress scenarios
+  var stressScenarios = [
+    { name: 'Normal Markets', desc: 'Your configured growth & volatility assumptions',
+      vol: volatilityPct, nomReturn: (p1ISAg + p2ISAg) / 2 || 0.07 },
+    { name: '2008 Global Financial Crisis', desc: 'Severe crash: markets fell ~50% peak-to-trough over 18 months',
+      vol: 0.30, nomReturn: 0.02 },
+    { name: '2000 Dot-Com Crash', desc: '3-year decline: markets fell ~45% with slow recovery',
+      vol: 0.25, nomReturn: 0.01 }
+  ];
+
+  var stressResults = [];
+  for (var si = 0; si < stressScenarios.length; si++) {
+    var sc = stressScenarios[si];
+    stressResults.push({ name: sc.name, desc: sc.desc, prob: bridgeMonteCarlo(sc.vol, sc.nomReturn) });
+  }
+
+  // Render bridge metric card
+  var bridgeRiskEl = G('bridgeRisk');
+  var bridgeRiskSubEl = G('bridgeRiskSub');
+  if (bridgeDuration === 0) {
+    bridgeRiskEl.className = 'value green';
+    bridgeRiskEl.textContent = 'No gap';
+    bridgeRiskSubEl.textContent = 'SIPP accessible from retirement';
+  } else {
+    var normalProb = stressResults[0].prob;
+    var cls = normalProb >= 85 ? 'green' : normalProb >= 60 ? 'orange' : 'red';
+    bridgeRiskEl.className = 'value ' + cls;
+    bridgeRiskEl.textContent = normalProb + '% safe';
+    bridgeRiskSubEl.textContent = bridgeDuration + ' yr bridge \u2022 ' + fmt(totalBridgeCost) + ' from ISA/GIA/Cash';
+  }
+
+  // Render bridge section subtitle
+  G('bridgeSubtitle').textContent = bridgeDuration === 0
+    ? 'No bridge needed \u2014 your SIPP is accessible from your retirement age.'
+    : bridgeDuration + ' years from age ' + retireAge + ' to ' + pensionAccessAge + ' before your SIPP becomes accessible.';
+
+  // Render bridge bar
+  var barPct = Math.min(100, bridgeFundedPct);
+  var barCol = barPct >= 100 ? 'var(--green)' : barPct >= 70 ? 'linear-gradient(90deg,var(--accent),var(--green))' : barPct >= 40 ? 'linear-gradient(90deg,var(--orange),var(--accent))' : 'linear-gradient(90deg,var(--red),var(--orange))';
+  G('bridgeBarFill').style.width = barPct + '%';
+  G('bridgeBarFill').style.background = barCol;
+  G('bridgeBarLeft').textContent = 'Projected ISA + GIA + Cash: ' + fmt(preSIPPfunding);
+  G('bridgeBarRight').textContent = totalBridgeCost > 0 ? bridgeFundedPct.toFixed(0) + '% of ' + fmt(totalBridgeCost) + ' bridge cost' : 'No gap';
+
+  // Render bridge phases
+  var bpHTML = '';
+  if (bridgeDuration === 0 && bridgePhaseData.length === 0) {
+    bpHTML = '<div class="bridge-phase"><div class="bp-header">No Bridge Needed</div><p style="font-size:12px;color:var(--text-muted);">Your SIPP is accessible from your retirement age. No unfunded gap to bridge.</p></div>';
+  } else {
+    for (var bpi = 0; bpi < bridgePhaseData.length; bpi++) {
+      var ph = bridgePhaseData[bpi];
+      var bridgeCls = '';
+      if (ph.isBridge) { bridgeCls = normalProb >= 80 ? ' bridge-safe' : normalProb >= 50 ? ' bridge-caution' : ' bridge-danger'; }
+      bpHTML += '<div class="bridge-phase' + bridgeCls + '">';
+      bpHTML += '<div class="bp-header">' + escHtml(ph.name) + (ph.isBridge && normalProb < 80 ? ' \u26a0\ufe0f' : '') + '</div>';
+      bpHTML += '<div class="bp-ages">Age ' + ph.fromAge + ' \u2013 ' + ph.toAge + ' (' + ph.years + ' year' + (ph.years !== 1 ? 's' : '') + ')</div>';
+      bpHTML += '<div class="bp-row"><span class="bp-label">Total spending</span><span class="bp-value">' + fmt(ph.spend) + '</span></div>';
+      if (ph.pension > 0) bpHTML += '<div class="bp-row"><span class="bp-label">Pension income</span><span class="bp-value green">\u2212' + fmt(ph.pension) + '</span></div>';
+      bpHTML += '<div class="bp-total"><span>Gap to fund</span><span class="' + (ph.gap > 0 ? 'orange' : 'green') + '">' + fmt(ph.gap) + '</span></div>';
+      bpHTML += '<div class="bp-source">Funded from: <strong>' + ph.sources.join(', ') + '</strong></div>';
+      bpHTML += '</div>';
+    }
+  }
+  G('bridgePhases').innerHTML = bpHTML;
+
+  // Render stress tests (only show if there's a bridge)
+  var stHTML = '';
+  if (bridgeDuration > 0) {
+    for (var sti = 0; sti < stressResults.length; sti++) {
+      var sr = stressResults[sti];
+      var scls = sr.prob >= 85 ? 'safe' : sr.prob >= 60 ? 'caution' : 'danger';
+      var vcls = sr.prob >= 85 ? 'green' : sr.prob >= 60 ? 'orange' : 'red';
+      stHTML += '<div class="stress-card ' + scls + '">';
+      stHTML += '<div class="sc-name">' + escHtml(sr.name) + '</div>';
+      stHTML += '<div class="sc-desc">' + escHtml(sr.desc) + '</div>';
+      stHTML += '<div class="sc-result ' + vcls + '">' + sr.prob + '%</div>';
+      stHTML += '<div class="sc-sub">probability bridge survives</div>';
+      stHTML += '</div>';
+    }
+  }
+  G('stressGrid').innerHTML = stHTML;
+  G('bridgeStress').style.display = bridgeDuration > 0 ? '' : 'none';
+
+  // Milestones
+  var ms = [
+    {name:'Coast FI',icon:'\u26f5',target:coastTarget,compare:totalInvestable,isCoast:true,
+      tip:'Your investments, growing at '+((realReturn)*100).toFixed(1)+'% real with no new contributions, will reach '+fmt(fiAtRetirement)+' by age '+retireAge+'.'},
+    {name:'Lean FIRE',icon:'\ud83c\udf31',target:leanAtRetire,compare:projectedAtRetire,
+      tip:'At age '+retireAge+' you need '+fmt(leanAtRetire)+' to live on '+Math.round(leanMult*100)+'% of planned spending ('+fmt(Math.round(getSpendingForAge(retireAge)*leanMult))+'/yr).'},
+    {name:'FI (Full)',icon:'\ud83d\udd25',target:fiAtRetire,compare:projectedAtRetire,
+      tip:'At age '+retireAge+' you need '+fmt(fiAtRetire)+' to fully fund your planned spending ('+fmt(getSpendingForAge(retireAge))+'/yr) to age '+retirementEnd+'.'},
+    {name:'Comfortable',icon:'\u2615',target:comfAtRetire,compare:projectedAtRetire,
+      tip:'At age '+retireAge+' you need '+fmt(comfAtRetire)+' for '+Math.round(comfMult*100)+'% of planned spending ('+fmt(Math.round(getSpendingForAge(retireAge)*comfMult))+'/yr).'},
+    {name:'Fat FIRE',icon:'\ud83d\ude80',target:fatAtRetire,compare:projectedAtRetire,
+      tip:'At age '+retireAge+' you need '+fmt(fatAtRetire)+' for '+Math.round(fatMult*100)+'% of planned spending ('+fmt(Math.round(getSpendingForAge(retireAge)*fatMult))+'/yr).'}
+  ];
+  ms.sort(function(a,b){return a.target-b.target;});
+  var maxT = ms[ms.length-1].target;
+  // Fixed positions: 5 milestones evenly spaced at 10%, 30%, 50%, 70%, 90%
+  var fixedPositions = [10, 30, 50, 70, 90];
+  // Calculate fill: interpolate between fixed positions based on where projected value falls
+  var fillPct = 0;
+  for (var fi = ms.length - 1; fi >= 0; fi--) {
+    if (ms[fi].compare >= ms[fi].target) {
+      // Reached this milestone — fill to its position (plus partial to next)
+      if (fi === ms.length - 1) { fillPct = 100; }
+      else {
+        var nextTarget = ms[fi+1].target;
+        var thisTarget = ms[fi].target;
+        var partial = nextTarget > thisTarget ? (ms[fi].compare - thisTarget) / (nextTarget - thisTarget) : 0;
+        fillPct = fixedPositions[fi] + partial * (fixedPositions[fi+1] - fixedPositions[fi]);
+      }
+      break;
+    }
+  }
+  if (fillPct === 0 && ms.length > 0 && ms[0].target > 0) {
+    fillPct = Math.min(fixedPositions[0], ms[0].compare / ms[0].target * fixedPositions[0]);
+  }
+  G('milestoneFill').style.width = Math.min(100, fillPct) + '%';
+
+  var mkH = ''; ms.forEach(function(m, idx) {
+    var pos = fixedPositions[idx];
+    mkH += '<div class="milestone-marker'+(m.compare>=m.target?' reached':'')+'" style="left:'+pos+'%"><div class="marker-line"></div><div class="marker-label">'+m.name+'</div></div>';
+  });
+  G('milestoneMarkers').innerHTML = mkH;
+
+  var mcAccounts = [
+    {bal:p1ISA,contrib:p1ISAc,growth:p1ISAg},{bal:p2ISA,contrib:p2ISAc,growth:p2ISAg},
+    {bal:p1SIPP,contrib:p1SIPPc,growth:p1SIPPg},{bal:p2SIPP,contrib:p2SIPPc,growth:p2SIPPg},
+    {bal:p1GIA,contrib:p1GIAc,growth:p1GIAg},{bal:p2GIA,contrib:p2GIAc,growth:p2GIAg}
+  ];
+  var mcLumps = [];
+  if (p1LumpAmt > 0) mcLumps.push({year: p1LumpAge - p1Age, amount: p1LumpAmt, confidence: p1LumpConf});
+  if (p2LumpAmt > 0) mcLumps.push({year: p2LumpAgeAsP1 - p1Age, amount: p2LumpAmt, confidence: p2LumpConf});
+  var mcMaxYears = Math.max(yearsToRetire + 5, 20);
+
+  var mcH = '', fc = false;
+  ms.forEach(function(m) {
+    var reached = m.compare >= m.target;
+    var cls = 'milestone-card', st = '', probHtml = '';
+    if (reached) { cls += ' reached'; st = m.isCoast ? '\u2713 Reached' : '\u2713 On track'; }
+    else {
+      if (!fc) { cls += ' current'; fc = true; }
+      st = fmt(m.target-m.compare)+' to go'+(m.isCoast?'':' at '+retireAge);
+      var prob = monteCarloProb(mcAccounts, m.target, mcMaxYears, volatilityPct, inflationRate, mcLumps);
+      var pcls = prob >= 75 ? 'high' : prob >= 40 ? 'med' : 'low';
+      probHtml = '<div class="ms-prob '+pcls+'">'+prob+'% likely</div>';
+    }
+    var targetLabel = m.isCoast ? 'Need today' : 'Need at '+retireAge;
+    mcH += '<div class="'+cls+'"><div class="ms-tooltip">'+m.tip+'</div><div class="ms-icon">'+m.icon+'</div><div class="ms-name">'+m.name+'</div><div class="ms-target-label">'+targetLabel+'</div><div class="ms-target">'+fmt(m.target)+'</div><div class="ms-status">'+st+'</div>'+probHtml+'</div>';
+  });
+  G('milestonesGrid').innerHTML = mcH;
+
+  // Projection chart (retireISA/SIPP/GIA already computed above for bridge)
+  var pL=[],pT=[],pI=[],pS=[],pRE=[];
+  var s1i=p1ISA,s2i=p2ISA,s1s=p1SIPP,s2s=p2SIPP,s1g=p1GIA,s2g=p2GIA;
+  for (var y=0;y<=yearsToRetire;y++) {
+    var yr=new Date().getFullYear()+y, age=p1Age+y;
+    pL.push(yr+'\n(age '+age+')');
+    if (y>0 && age===p1LumpAge && p1LumpEff>0) s1i+=p1LumpEff;
+    if (y>0 && age===p2LumpAgeAsP1 && p2LumpEff>0) s2i+=p2LumpEff;
+    var ti=s1i+s2i, ts=s1s+s2s, tg=s1g+s2g;
+    pT.push(ti+ts+tg); pI.push(ti); pS.push(ts+tg);
+    var pSIPPfrac = (s1s+s2s) > 0 ? (s1s+s2s)/(ti+ts+tg) : 0;
+    pRE.push(portfolioNeededAtAge(age, retirementEnd, realReturn, getPensionForAge, 1.0, getMonthlyExpForAge, pSIPPfrac, sippTaxRate));
+    var rI1=(1+p1ISAg)/(1+inflationRate)-1, rI2=(1+p2ISAg)/(1+inflationRate)-1;
+    var rS1=(1+p1SIPPg)/(1+inflationRate)-1, rS2=(1+p2SIPPg)/(1+inflationRate)-1;
+    var rG1=(1+p1GIAg)/(1+inflationRate)-1, rG2=(1+p2GIAg)/(1+inflationRate)-1;
+    var preRetire = age < retireAge;
+    s1i=s1i*(1+rI1)+(preRetire?p1ISAc*12:0); s2i=s2i*(1+rI2)+(preRetire?p2ISAc*12:0);
+    s1s=s1s*(1+rS1)+(preRetire?p1SIPPc*12:0); s2s=s2s*(1+rS2)+(preRetire?p2SIPPc*12:0);
+    s1g=s1g*(1+rG1)+(preRetire?p1GIAc*12:0); s2g=s2g*(1+rG2)+(preRetire?p2GIAc*12:0);
+  }
+
+  G('p1Breakdown').innerHTML = bH([['ISA',p1ISA,fmt(p1ISAc)+'/mo @ '+num('p1ISAGrowth')+'%'],['SIPP',p1SIPP,fmt(p1SIPPc)+'/mo @ '+num('p1SIPPGrowth')+'%'],['GIA',p1GIA,fmt(p1GIAc)+'/mo @ '+num('p1GIAGrowth')+'%'],['Cash',p1Cash,'']],p1ISA+p1SIPP+p1GIA+p1Cash);
+  G('p2Breakdown').innerHTML = bH([['ISA',p2ISA,fmt(p2ISAc)+'/mo @ '+num('p2ISAGrowth')+'%'],['SIPP',p2SIPP,fmt(p2SIPPc)+'/mo @ '+num('p2SIPPGrowth')+'%'],['GIA',p2GIA,fmt(p2GIAc)+'/mo @ '+num('p2GIAGrowth')+'%'],['Cash',p2Cash,'']],p2ISA+p2SIPP+p2GIA+p2Cash);
+
+  // Phase cards
+  var pc=G('incomePhases'); pc.innerHTML='';
+  spendingPhases.forEach(function(ph,i){
+    var pen=getPensionForAge(ph.fromAge), dd=Math.max(0,ph.amount-pen);
+    var card=document.createElement('div'); card.className='phase-card';
+    var h='<h4>Phase '+(i+1)+': Age '+ph.fromAge+'\u2013'+ph.toAge+'</h4>';
+    h+=mr('Annual spending',fmt(ph.amount)); h+=mr('Monthly',fmt(Math.round(ph.amount/12))+'/mo');
+    h+='<div style="height:8px"></div>';
+    if(ph.fromAge>=p1DBAge) h+=mr(p1Name+"'s DB",fmt(p1DB));
+    if(ph.fromAge>=p1SPAge) h+=mr(p1Name+"'s SP",fmt(p1SP));
+    var pa=ph.fromAge-ageDiff;
+    if(pa>=p2DBAge) h+=mr(p2Name+"'s DB",fmt(p2DB));
+    if(pa>=p2SPAge) h+=mr(p2Name+"'s SP",fmt(p2SP));
+    if(pen>0){h+=mr('Pension total',fmt(pen),1);h+=mr('From portfolio',fmt(dd),1);}
+    else{h+=mr('Pensions','None yet');h+=mr('From portfolio',fmt(ph.amount),1);}
+    card.innerHTML=h; pc.appendChild(card);
+  });
+
+  // Spending chart
+  var sL=[],sD=[],sP=[];
+  for(var a=retireAge;a<retirementEnd;a++){sL.push('Age '+a);var sp=getSpendingForAge(a),pe=getPensionForAge(a);sD.push(Math.max(0,sp-pe));sP.push(Math.min(pe,sp));}
+  if(spendChart){spendChart.data={labels:sL,datasets:[{label:'From Portfolio',data:sD,backgroundColor:'rgba(108,92,231,0.6)',borderColor:'#6c5ce7',borderWidth:1,stack:'i'},{label:'From Pensions',data:sP,backgroundColor:'rgba(0,184,148,0.6)',borderColor:'#00b894',borderWidth:1,stack:'i'}]};
+  spendChart.update();}
+
+  if(projChart){projChart.data={labels:pL,datasets:[
+    {label:'Total Portfolio',data:pT,borderColor:'#6c5ce7',backgroundColor:'rgba(108,92,231,0.1)',fill:true,tension:0.3,pointRadius:2,borderWidth:2},
+    {label:'ISAs',data:pI,borderColor:'#00b894',backgroundColor:'transparent',borderDash:[4,4],tension:0.3,pointRadius:0,borderWidth:1.5},
+    {label:'Pensions+GIA',data:pS,borderColor:'#fd79a8',backgroundColor:'transparent',borderDash:[4,4],tension:0.3,pointRadius:0,borderWidth:1.5},
+    {label:'RE Target',data:pRE,borderColor:'#fdcb6e',backgroundColor:'transparent',borderDash:[8,4],tension:0.3,pointRadius:0,borderWidth:2}
+  ]}; projChart.update();}
+
+  var ad=[
+    {l:p1Name+"'s ISA",v:p1ISA,c:'#6c5ce7'},{l:p1Name+"'s SIPP",v:p1SIPP,c:'#a29bfe'},{l:p1Name+"'s GIA",v:p1GIA,c:'#74b9ff'},{l:p1Name+"'s Cash",v:p1Cash,c:'#0984e3'},
+    {l:p2Name+"'s ISA",v:p2ISA,c:'#00b894'},{l:p2Name+"'s SIPP",v:p2SIPP,c:'#55efc4'},{l:p2Name+"'s GIA",v:p2GIA,c:'#81ecec'},{l:p2Name+"'s Cash",v:p2Cash,c:'#00cec9'},
+    {l:'Property'+(inclProp==='equity'?' (equity)':''),v:propComp,c:'#e17055'}
+  ].filter(function(d){return d.v>0;});
+  if(allocChart){allocChart.data={labels:ad.map(function(d){return d.l;}),datasets:[{data:ad.map(function(d){return d.v;}),backgroundColor:ad.map(function(d){return d.c;}),borderColor:getCSS('--card'),borderWidth:2}]};
+  allocChart.update();}
+
+  // Drawdown chart
+  var dL=[],dTotal=[],dISA=[],dSIPP=[],dGIA=[],dPe=[],dSp=[];
+  // sippGU and pensionAccessAge already declared in bridge section above
+  var ddISA=retireISA, ddSIPP=retireSIPP, ddGIA=retireGIA;
+  for(var y=0;y<=retirementEnd-retireAge;y++){
+    var a=retireAge+y;
+    dL.push('Age '+a);
+    dISA.push(Math.max(0,ddISA)); dSIPP.push(Math.max(0,ddSIPP)); dGIA.push(Math.max(0,ddGIA));
+    dTotal.push(Math.max(0,ddISA+ddSIPP+ddGIA));
+    var sp=getSpendingForAge(a), pe=getPensionForAge(a);
+    dSp.push(sp); dPe.push(pe);
+    ddISA *= (1+realReturn); ddSIPP *= (1+realReturn); ddGIA *= (1+realReturn);
+    if (a===p1LumpAge && p1LumpEff>0) ddISA+=p1LumpEff;
+    if (a===p2LumpAgeAsP1 && p2LumpEff>0) ddISA+=p2LumpEff;
+    var draw = Math.max(0, sp - pe);
+    if (draw > 0 && ddGIA > 0) { var take=Math.min(draw, ddGIA); ddGIA-=take; draw-=take; }
+    if (draw > 0 && ddISA > 0) { var take=Math.min(draw, ddISA); ddISA-=take; draw-=take; }
+    if (draw > 0 && ddSIPP > 0 && a >= pensionAccessAge) {
+      var grossNeeded = draw * sippGU;
+      var take = Math.min(grossNeeded, ddSIPP);
+      ddSIPP -= take; draw -= take / sippGU;
+    }
+    if (draw > 0 && ddSIPP > 0 && a < pensionAccessAge) {
+      var grossNeeded = draw * sippGU;
+      var take = Math.min(grossNeeded, ddSIPP);
+      ddSIPP -= take; draw -= take / sippGU;
+    }
+    ddISA=Math.max(0,ddISA); ddSIPP=Math.max(0,ddSIPP); ddGIA=Math.max(0,ddGIA);
+  }
+  if(drawChart){
+    var ddDatasets = [
+      {label:'Total Portfolio',data:dTotal,borderColor:'#6c5ce7',backgroundColor:'rgba(108,92,231,0.08)',fill:true,tension:0.3,pointRadius:1,borderWidth:2.5},
+      {label:'ISAs',data:dISA,borderColor:'#00b894',backgroundColor:'transparent',tension:0.3,pointRadius:0,borderWidth:1.5,borderDash:[4,4]},
+      {label:'SIPPs',data:dSIPP,borderColor:'#a29bfe',backgroundColor:'transparent',tension:0.3,pointRadius:0,borderWidth:1.5,borderDash:[4,4]},
+      {label:'GIAs',data:dGIA,borderColor:'#74b9ff',backgroundColor:'transparent',tension:0.3,pointRadius:0,borderWidth:1.5,borderDash:[4,4]}
+    ];
+    if (showPensionOnDrawdown) {
+      ddDatasets.push({label:'Annual Spending',data:dSp,borderColor:'#fdcb6e',backgroundColor:'transparent',borderDash:[8,4],tension:0,pointRadius:0,borderWidth:2,yAxisID:'y1'});
+      ddDatasets.push({label:'Pension Income',data:dPe,borderColor:'#00b894',backgroundColor:'rgba(0,184,148,0.08)',fill:true,tension:0,pointRadius:0,borderWidth:1.5,yAxisID:'y1'});
+    }
+    drawChart.data={labels:dL,datasets:ddDatasets};
+    if (showPensionOnDrawdown) {
+      drawChart.options.scales.y1={display:true,position:'right',ticks:{callback:function(v){return fmtK(v);},font:{size:11}},grid:{display:false}};
+    } else {
+      drawChart.options.scales.y1={display:false};
+    }
+    drawChart.update();
+  }
+}
+
+function bH(items,total){var h='';items.forEach(function(arr){var l=arr[0],v=arr[1],d=arr[2];h+='<div class="breakdown-row"><span class="item-label">'+l+(d?'<br><span style="font-size:10px;color:var(--text-muted)">'+d+'</span>':'')+'</span><span class="item-value">'+fmt(v)+'</span></div>';});h+='<div class="breakdown-row total"><span class="item-label">Total</span><span class="item-value green">'+fmt(total)+'</span></div>';return h;}
+function mr(l,v,hl){var c=hl?'breakdown-row total':'breakdown-row',vc=hl?'item-value green':'item-value';return '<div class="'+c+'"><span class="item-label">'+l+'</span><span class="'+vc+'">'+v+'</span></div>';}
+
+function setupListeners(){document.querySelectorAll('.sidebar input,.sidebar select').forEach(function(el){el.addEventListener('input',function(){updateRD();calculate();saveToStorage();});});}
+function updateRD(){G('realReturnVal').textContent=parseFloat(G('realReturn').value).toFixed(1)+'%';G('inflationVal').textContent=parseFloat(G('inflation').value).toFixed(1)+'%';G('volatilityVal').textContent=Math.round(parseFloat(G('volatility').value))+'%';}
+function getCSS(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+
+// ===== THEME =====
+function applyThemeToCharts(){
+  if (typeof Chart === 'undefined') return;
+  var txtCol=getCSS('--text-muted'), gridCol=getCSS('--chart-grid'), borderCol=getCSS('--border');
+  Chart.defaults.color=txtCol; Chart.defaults.borderColor=borderCol;
+  [projChart,drawChart,spendChart].forEach(function(ch){if(!ch)return;
+    ['x','y','y1'].forEach(function(ax){if(ch.options.scales&&ch.options.scales[ax]){
+      if(ch.options.scales[ax].ticks)ch.options.scales[ax].ticks.color=txtCol;
+      if(ch.options.scales[ax].grid)ch.options.scales[ax].grid.color=gridCol;
+    }});ch.update();});
+  if(allocChart){allocChart.options.plugins.legend.labels.color=txtCol;allocChart.update();}
+}
+
+function setTheme(mode){
+  if(mode==='light'){document.documentElement.classList.add('light');G('themeToggle').innerHTML='&#9728;';}
+  else{document.documentElement.classList.remove('light');G('themeToggle').innerHTML='&#9790;';}
+  try{localStorage.setItem('fire-theme',mode);}catch(e){}
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', mode === 'light' ? '#f0f2f5' : '#0f1117');
+  applyThemeToCharts();
+  calculate();
+}
+
+// ===== INIT =====
+try {
+  loadFromStorage();
+  var savedTheme = localStorage.getItem('fire-theme') || 'dark';
+  if (savedTheme === 'light') document.documentElement.classList.add('light');
+  initCharts();
+  renderAnnualPayments();
+  renderSpendingPhases();
+  updateRD();
+  setupListeners();
+  calculate();
+  setTheme(savedTheme);
+
+  // Show walkthrough on first visit
+  var seenTour = false;
+  try { seenTour = localStorage.getItem('fire-walkthrough-seen') === '1'; } catch(e) {}
+  if (!seenTour) showWalkthrough();
+
+  // Help tour replay button
+  var tourBtn = G('replayTour');
+  if (tourBtn) tourBtn.addEventListener('click', function() { showWalkthrough(); });
+
+  // Close help tips when tapping elsewhere (mobile)
+  document.addEventListener('click', function(e) {
+    if (!e.target.classList.contains('help-tip')) {
+      var allTips = document.querySelectorAll('.help-tip.active');
+      for (var i = 0; i < allTips.length; i++) allTips[i].classList.remove('active');
+    }
+  });
+} catch(e) {
+  console.error('Dashboard init error:', e);
+}
+</script>
+</body>
+</html>
