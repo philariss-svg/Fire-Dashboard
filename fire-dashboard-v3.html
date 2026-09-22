@@ -298,6 +298,12 @@
     <button class="add-btn" id="importBtn" style="margin-top:0;flex:1;">Import JSON</button>
   </div>
   <input type="file" id="importFile" accept=".json" style="display:none;">
+  <div style="display:flex;gap:8px;margin-bottom:8px;">
+    <button class="add-btn" id="exportReportBtn" style="margin-top:0;flex:1;">&#128196; Export Report</button>
+    <button class="add-btn" id="copyReportBtn" style="margin-top:0;flex:1;">&#128203; Copy Report</button>
+  </div>
+  <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">A full, plain-English write-up of where you stand &mdash; great for your own records, or to paste into an AI assistant for a second opinion.</p>
+  <div id="reportStatus" style="font-size:11px;color:var(--green);text-align:center;margin-bottom:4px;opacity:0;transition:opacity 0.3s;">Copied!</div>
   <div id="saveStatus" style="font-size:11px;color:var(--green);text-align:center;margin-bottom:4px;opacity:0;transition:opacity 0.3s;">Saved</div>
 
   <h2>General <span class="help-tip" onclick="this.classList.toggle('active')">?<span class="tip-content"><span class="tip-title">Getting Started</span>Set your target retirement age and decide whether to include your home in your net worth calculation. Most FIRE planners exclude property since you need somewhere to live.</span></span></h2>
@@ -1373,24 +1379,29 @@ function calculate() {
   }
 
   var mcH = '', fc = false;
+  var msReport = []; // #18 mirrors the milestone cards above, for the Export Report feature
   ms.forEach(function(m) {
     var reached = m.compare >= m.target;
     var cls = 'milestone-card', st = '', probHtml = '';
+    var reachProb = null, survivalProb = null;
     if (reached) { cls += ' reached'; st = m.isCoast ? '\u2713 Reached' : '\u2713 On track'; }
     else {
       if (!fc) { cls += ' current'; fc = true; }
       st = fmt(m.target-m.compare)+' to go'+(m.isCoast?'':' at '+retireAge);
       var prob = monteCarloProb(mcAccounts, m.target, mcMaxYears, volatilityPct, inflationRate, mcLumps);
+      reachProb = prob;
       var pcls = prob >= 75 ? 'high' : prob >= 40 ? 'med' : 'low';
       probHtml = '<div class="ms-prob '+pcls+'" title="Chance your saving reaches this number by age '+retireAge+'">'+prob+'% reach by '+retireAge+'</div>';
     }
     if (!m.isCoast) {
       var sprob = retirementSurvivalProb(m.target, m.mult);
+      survivalProb = sprob;
       var scls = sprob >= 85 ? 'high' : sprob >= 60 ? 'med' : 'low';
       probHtml += '<div class="ms-prob '+scls+'" style="margin-top:3px" title="Chance a pot this size survives spending to age '+retirementEnd+'">'+sprob+'% lasts to '+retirementEnd+'</div>';
     }
     var targetLabel = m.isCoast ? 'Need today' : 'Need at '+retireAge;
     mcH += '<div class="'+cls+'"><div class="ms-tooltip">'+m.tip+'</div><div class="ms-icon">'+m.icon+'</div><div class="ms-name">'+m.name+'</div><div class="ms-target-label">'+targetLabel+'</div><div class="ms-target">'+fmt(m.target)+'</div><div class="ms-status">'+st+'</div>'+probHtml+'</div>';
+    msReport.push({ name:m.name, icon:m.icon, target:m.target, compare:m.compare, reached:reached, isCoast:!!m.isCoast, targetLabel:targetLabel, reachProb:reachProb, survivalProb:survivalProb });
   });
   G('milestonesGrid').innerHTML = mcH;
 
@@ -1604,10 +1615,285 @@ function calculate() {
     seqChart.update();
   }
   } catch(err) { console.error('scenario/tornado/sequence render failed:', err); }
+
+  // ===== #18 REPORT DATA SNAPSHOT — everything the Export Report feature needs, in one place =====
+  try {
+    window.reportData = {
+      generatedAt: new Date().toISOString(),
+      names: { p1: p1Name, p2: p2Name },
+      ages: { p1: p1Age, p2: p2Age },
+      retireAge: retireAge, retirementEnd: retirementEnd, pensionAccessAge: pensionAccessAge,
+      income: { p1Monthly: p1Inc, p2Monthly: p2Inc, totalMonthly: totalMonthlyIncome },
+      expenses: { monthlyCore: monthlyExp, annualExtras: annualPayTotal, totalMonthlyOutgoings: totalMonthlyOutgoings, annualPaymentsList: annualPayments.slice() },
+      contributions: { totalMonthly: totalMonthlyContrib, annual: annualContrib },
+      monthlySurplus: monthlySurplus,
+      savingsRatePct: savingsRate,
+      accounts: {
+        p1: { isa:p1ISA, isaContrib:p1ISAc, isaGrowth:num('p1ISAGrowth'), sipp:p1SIPP, sippContrib:p1SIPPc, sippGrowth:num('p1SIPPGrowth'), gia:p1GIA, giaContrib:p1GIAc, giaGrowth:num('p1GIAGrowth'), cash:p1Cash },
+        p2: { isa:p2ISA, isaContrib:p2ISAc, isaGrowth:num('p2ISAGrowth'), sipp:p2SIPP, sippContrib:p2SIPPc, sippGrowth:num('p2SIPPGrowth'), gia:p2GIA, giaContrib:p2GIAc, giaGrowth:num('p2GIAGrowth'), cash:p2Cash }
+      },
+      pensions: {
+        p1: { db:p1DB, dbAge:p1DBAge, sp:p1SP, spAge:p1SPAge },
+        p2: { db:p2DB, dbAge:p2DBAge, sp:p2SP, spAge:p2SPAge },
+        totalAnnual: totalPensionIncome
+      },
+      netWorth: { investable: totalInvestable, cash: totalCash, property: propComp, includeProperty: inclProp, total: totalNetWorth },
+      reNumber: fiAtRetire,
+      projectedAtRetire: projectedAtRetire,
+      progressPct: progressPercent,
+      yearsToRE: yearsToRE, reAge: reAge,
+      coast: { target: coastTarget, achieved: isCoastFI, current: totalInvestable, growthRealPct: coastGrowthReal*100 },
+      milestones: msReport,
+      bridge: {
+        durationYears: bridgeDuration, totalCost: totalBridgeCost, fundingAvailable: preSIPPfunding,
+        fundedPct: bridgeFundedPct, phases: bridgePhaseData, stressResults: stressResults
+      },
+      assumptions: {
+        realReturnPct: realReturn*100, inflationPct: inflationRate*100, volatilityPct: volatilityPct*100,
+        pensionAccessAge: pensionAccessAge, sippTaxRatePct: sippTaxRate*100, planningHorizonAge: retirementEnd
+      },
+      spendingPhases: spendingPhases.slice(),
+      scenarioComparison: (typeof cols !== 'undefined' && cols) ? cols : null,
+      propertyValue: propVal, mortgageBalance: mortBal
+    };
+  } catch(rdErr) { console.error('report data snapshot failed:', rdErr); }
 }
 
 function bH(items,total){var h='';items.forEach(function(arr){var l=arr[0],v=arr[1],d=arr[2];h+='<div class="breakdown-row"><span class="item-label">'+l+(d?'<br><span style="font-size:10px;color:var(--text-muted)">'+d+'</span>':'')+'</span><span class="item-value">'+fmt(v)+'</span></div>';});h+='<div class="breakdown-row total"><span class="item-label">Total</span><span class="item-value green">'+fmt(total)+'</span></div>';return h;}
 function mr(l,v,hl){var c=hl?'breakdown-row total':'breakdown-row',vc=hl?'item-value green':'item-value';return '<div class="'+c+'"><span class="item-label">'+l+'</span><span class="'+vc+'">'+v+'</span></div>';}
+
+// ===== #18 EXPORT REPORT — builds a plain-English, LLM-friendly Markdown write-up of the whole plan =====
+function buildFireReportMarkdown() {
+  if (!window.reportData) { try { calculate(); } catch(e) {} }
+  var RD = window.reportData;
+  if (!RD) return '# FIRE Dashboard Report\n\nNo data yet — fill in the dashboard sidebar first, then try again.\n';
+
+  var L = [];
+  function add(s) { L.push(s); }
+  function money(n) { return fmt(Math.round(n)); }
+  function pct1(n) { return (Math.round(n*10)/10) + '%'; }
+  var p1 = RD.names.p1, p2 = RD.names.p2;
+  var genDate = new Date(RD.generatedAt).toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  add('# \ud83d\udd25 FIRE Plan Report \u2014 ' + p1 + ' & ' + p2);
+  add('');
+  add('*Generated ' + genDate + '. All figures are in today\u2019s money (i.e. adjusted for inflation) unless stated otherwise. This is a personal planning summary, not regulated financial advice \u2014 always sense-check big decisions with a qualified adviser.*');
+  add('');
+  add('---');
+  add('');
+  add('## How to read this report');
+  add('');
+  add('This walks through the same numbers as the dashboard, section by section, in plain English. Good news first, then the honest bits. If you\u2019re short on time, section 2 (The Headline) has the one paragraph that matters most.');
+  add('');
+  add('---');
+  add('');
+
+  // ===== 1. THE BIG PICTURE =====
+  add('## 1. The Big Picture \u2014 Net Worth');
+  add('');
+  add('| Item | Amount |');
+  add('|---|---|');
+  add('| Investable assets (ISAs + SIPPs + GIAs + cash) | ' + money(RD.netWorth.investable) + ' |');
+  if (RD.netWorth.includeProperty !== 'no') {
+    add('| Property (' + (RD.netWorth.includeProperty === 'equity' ? 'equity only' : 'full value') + ') | ' + money(RD.netWorth.property) + ' |');
+    add('| **Total net worth** | **' + money(RD.netWorth.total) + '** |');
+  } else {
+    add('| Property | Excluded from this total by choice \u2014 most FIRE plans do this since you still need somewhere to live |');
+  }
+  add('');
+  add('**In plain terms:** this is everything you own that could, in theory, be turned into retirement income \u2014 not counting the roof over your head.');
+  add('');
+
+  // ===== 2. THE HEADLINE =====
+  add('## 2. The Headline \u2014 Are We On Track?');
+  add('');
+  var onTrackWord = RD.yearsToRE === 0 ? 'You could retire right now and your plan holds up.' :
+    RD.yearsToRE > 0 ? ('At your current pace, you\u2019re on track to hit your number around age **' + RD.reAge + '** (in about ' + RD.yearsToRE + ' year' + (RD.yearsToRE===1?'':'s') + '), which is ' + (RD.reAge <= RD.retireAge ? 'at or before' : 'a bit later than') + ' your target of age ' + RD.retireAge + '.') :
+    'On current numbers, the model can\u2019t find a retirement date within the next 40 years \u2014 usually fixable by saving a bit more, spending a bit less in retirement, or pushing the target age out. See section 9 for what moves the needle most.';
+  add(onTrackWord);
+  add('');
+  add('- **Your FIRE number** (what you need saved by age ' + RD.retireAge + '): **' + money(RD.reNumber) + '**');
+  add('- **What you\u2019d have today, projected forward** to age ' + RD.retireAge + ': **' + money(RD.projectedAtRetire) + '**');
+  add('- **Progress toward that number:** ' + pct1(RD.progressPct) + (RD.progressPct >= 100 ? ' \u2014 you\u2019re projected to overshoot, which is a great problem to have' : ''));
+  add('- **Coast FI:** ' + (RD.coast.achieved
+      ? '**Already achieved.** ' + money(RD.coast.current) + ' invested today, left to grow untouched at roughly ' + pct1(RD.coast.growthRealPct) + ' a year after inflation, is expected to reach your FIRE number by age ' + RD.retireAge + ' \u2014 even if you stopped saving completely.'
+      : 'Not quite there \u2014 you\u2019d need **' + money(RD.coast.target) + '** invested today to coast to your number by age ' + RD.retireAge + ' without saving another penny. You currently have ' + money(RD.coast.current) + ', so you\u2019re **' + money(RD.coast.target - RD.coast.current) + ' short** of that particular milestone.') + '');
+  add('');
+  add('**What\u2019s the difference between "on track" and "Coast FI"?** Coast FI asks "if I stopped saving today, would I still get there?" Being on track for your retirement age just means your current saving-and-growing plan gets you there \u2014 you don\u2019t need to have already banked the whole amount.');
+  add('');
+
+  // ===== 3. MILESTONES =====
+  add('## 3. Milestones \u2014 Lean, Comfortable & Fat FIRE');
+  add('');
+  add('These are different "flavours" of retirement, from bare-bones to living large. Each one asks: if you retire at age ' + RD.retireAge + ', is your projected pot big enough to fund that lifestyle for the rest of your life?');
+  add('');
+  RD.milestones.forEach(function(m) {
+    var status;
+    if (m.reached) {
+      status = m.isCoast ? '\u2705 **Already achieved.**' : '\u2705 **On track \u2014 your current plan gets you here.**';
+    } else {
+      status = '\ud83c\udfaf **' + money(m.target - m.compare) + ' more needed**' + (m.isCoast ? '' : ' by age ' + RD.retireAge) + '.';
+    }
+    var probBits = [];
+    if (m.reachProb != null) probBits.push(m.reachProb + '% odds of reaching it by age ' + RD.retireAge);
+    if (m.survivalProb != null) probBits.push(m.survivalProb + '% odds it lasts you to age ' + RD.retirementEnd + ' once you start spending it');
+    add('- ' + m.icon + ' **' + m.name + '** \u2014 ' + m.targetLabel + ': ' + money(m.target) + '. ' + status + (probBits.length ? ' _(' + probBits.join('; ') + ')_' : ''));
+  });
+  add('');
+  add('*A quick note on those percentages: they come from running the numbers 1,000 times with randomly varying investment returns each time (a "Monte Carlo simulation") \u2014 it\u2019s a way of stress-testing the plan against normal market ups and downs, not a guarantee.*');
+  add('');
+
+  // ===== 4. THE BRIDGE =====
+  add('## 4. The Bridge \u2014 The Riskiest Part of Any Early Retirement');
+  add('');
+  add('Here\u2019s the thing pension providers don\u2019t always spell out: your SIPP is locked away until age ' + RD.pensionAccessAge + '. If you retire earlier than that, there\u2019s a gap \u2014 "the bridge" \u2014 where you\u2019re living entirely off ISAs, GIAs and cash, with no fresh income coming in. It\u2019s the single riskiest stretch of any FIRE plan because you\u2019re selling investments, not buying them.');
+  add('');
+  if (RD.bridge.durationYears === 0) {
+    add('**Good news \u2014 you don\u2019t have one.** Your SIPP is accessible from your target retirement age, so there\u2019s no gap to fund.');
+  } else {
+    add('- **Length of the bridge:** ' + RD.bridge.durationYears + ' year' + (RD.bridge.durationYears===1?'':'s') + ' (age ' + RD.retireAge + ' to ' + RD.pensionAccessAge + ')');
+    add('- **Total cost of the bridge:** ' + money(RD.bridge.totalCost));
+    add('- **Funding available for it** (ISA + GIA + cash, projected at retirement): ' + money(RD.bridge.fundingAvailable));
+    add('- **Funded:** ' + Math.min(100, RD.bridge.fundedPct).toFixed(0) + '%' + (RD.bridge.fundedPct >= 100 ? ' \u2014 fully covered' : ''));
+    add('');
+    add('### Bridge phases');
+    add('');
+    RD.bridge.phases.forEach(function(ph) {
+      add('**' + ph.name + '** (age ' + ph.fromAge + '\u2013' + ph.toAge + ', ' + ph.years + ' year' + (ph.years!==1?'s':'') + ')  ');
+      add('Spending needed: ' + money(ph.spend) + (ph.pension > 0 ? ' | Pension covers: ' + money(ph.pension) : '') + ' | Gap to fund: **' + money(ph.gap) + '** | Paid from: ' + ph.sources.join(', '));
+      add('');
+    });
+    add('### Stress tests \u2014 what if markets crash right when you retire?');
+    add('');
+    add('| Scenario | What it models | Chance the bridge survives |');
+    add('|---|---|---|');
+    RD.bridge.stressResults.forEach(function(sr) {
+      add('| ' + sr.name + ' | ' + sr.desc + ' | ' + sr.prob + '% |');
+    });
+    add('');
+    var normalRes = RD.bridge.stressResults[0];
+    if (normalRes && normalRes.prob < 80) {
+      add('Worth flagging honestly: under your own configured assumptions, the bridge only survives ' + normalRes.prob + '% of simulations. That\u2019s not a red flag on its own \u2014 but it\u2019s worth knowing, and a bigger cash buffer or a later retirement age are the two levers that move this number most.');
+    } else {
+      add('Your bridge holds up well even under normal market bumps \u2014 that\u2019s a genuinely strong position to be in.');
+    }
+  }
+  add('');
+
+  // ===== 5. INCOME, SPENDING & SAVING =====
+  add('## 5. Income, Spending & Saving Rate');
+  add('');
+  add('| | Monthly | Annual |');
+  add('|---|---|---|');
+  add('| Household income (take-home) | ' + money(RD.income.totalMonthly) + ' | ' + money(RD.income.totalMonthly*12) + ' |');
+  add('| Outgoings (bills + annual extras \u00f712) | ' + money(RD.expenses.totalMonthlyOutgoings) + ' | ' + money(RD.expenses.totalMonthlyOutgoings*12) + ' |');
+  add('| Going into investments | ' + money(RD.contributions.totalMonthly) + ' | ' + money(RD.contributions.annual) + ' |');
+  add('| **Left over (surplus)** | **' + money(RD.monthlySurplus) + '** | ' + money(RD.monthlySurplus*12) + ' |');
+  add('');
+  add('**Savings rate: ' + pct1(RD.savingsRatePct) + '** of take-home income. This is the single biggest lever in the whole plan \u2014 it decides how fast the "Years to RE" number in section 2 moves. Roughly speaking, a 50% savings rate points to a much shorter working life than a 15% one, regardless of salary.');
+  add('');
+
+  // ===== 6. ACCOUNT BREAKDOWN =====
+  add('## 6. Account Breakdown');
+  add('');
+  [['p1', p1], ['p2', p2]].forEach(function(pair) {
+    var key = pair[0], name = pair[1], a = RD.accounts[key];
+    var total = a.isa + a.sipp + a.gia + a.cash;
+    if (total === 0 && a.isaContrib === 0 && a.sippContrib === 0 && a.giaContrib === 0) return; // skip an empty/unused person slot
+    add('### ' + name);
+    add('');
+    add('| Account | Balance | Monthly in | Growth rate |');
+    add('|---|---|---|---|');
+    add('| ISA (tax-free) | ' + money(a.isa) + ' | ' + money(a.isaContrib) + '/mo | ' + a.isaGrowth + '% |');
+    add('| SIPP (pension, locked to ' + RD.pensionAccessAge + ') | ' + money(a.sipp) + ' | ' + money(a.sippContrib) + '/mo | ' + a.sippGrowth + '% |');
+    add('| GIA (general investing) | ' + money(a.gia) + ' | ' + money(a.giaContrib) + '/mo | ' + a.giaGrowth + '% |');
+    add('| Cash savings | ' + money(a.cash) + ' | \u2014 | \u2014 |');
+    add('| **Total** | **' + money(total) + '** | | |');
+    add('');
+  });
+
+  // ===== 7. PENSIONS =====
+  add('## 7. Guaranteed Pension Income');
+  add('');
+  add('Money that turns up regardless of what the stock market does \u2014 this directly reduces how much you need saved, because it covers part of your spending automatically.');
+  add('');
+  add('| | ' + p1 + ' | ' + p2 + ' |');
+  add('|---|---|---|');
+  add('| Defined Benefit (DB) pension | ' + (RD.pensions.p1.db > 0 ? money(RD.pensions.p1.db) + '/yr from age ' + RD.pensions.p1.dbAge : 'None entered') + ' | ' + (RD.pensions.p2.db > 0 ? money(RD.pensions.p2.db) + '/yr from age ' + RD.pensions.p2.dbAge : 'None entered') + ' |');
+  add('| State Pension | ' + (RD.pensions.p1.sp > 0 ? money(RD.pensions.p1.sp) + '/yr from age ' + RD.pensions.p1.spAge : 'None entered') + ' | ' + (RD.pensions.p2.sp > 0 ? money(RD.pensions.p2.sp) + '/yr from age ' + RD.pensions.p2.spAge : 'None entered') + ' |');
+  add('');
+  add('**Combined guaranteed income once everything has kicked in: ' + money(RD.pensions.totalAnnual) + '/year.**');
+  add('');
+
+  // ===== 8. RETIREMENT SPENDING PLAN =====
+  add('## 8. Planned Retirement Spending');
+  add('');
+  add('How much you\u2019ve said you\u2019ll spend at each stage of retirement (today\u2019s money) \u2014 most people spend more in the early, active years and less later on.');
+  add('');
+  add('| Ages | Planned annual spend |');
+  add('|---|---|');
+  RD.spendingPhases.forEach(function(p) { add('| ' + p.fromAge + '\u2013' + p.toAge + ' | ' + money(p.amount) + ' |'); });
+  add('');
+
+  // ===== 9. SCENARIO COMPARISON =====
+  if (RD.scenarioComparison && RD.scenarioComparison.length) {
+    add('## 9. Comparing Different Retirement Ages');
+    add('');
+    add('| | ' + RD.scenarioComparison.map(function(c){return 'Age ' + c.a;}).join(' | ') + ' |');
+    add('|---|' + RD.scenarioComparison.map(function(){return '---';}).join('|') + '|');
+    add('| Amount needed | ' + RD.scenarioComparison.map(function(c){return money(c.need);}).join(' | ') + ' |');
+    add('| Projected pot | ' + RD.scenarioComparison.map(function(c){return money(c.pot);}).join(' | ') + ' |');
+    add('| Progress | ' + RD.scenarioComparison.map(function(c){return Math.min(999,c.prog).toFixed(0)+'%';}).join(' | ') + ' |');
+    add('| Bridge length | ' + RD.scenarioComparison.map(function(c){return c.bridge + ' yr' + (c.bridge===1?'':'s');}).join(' | ') + ' |');
+    add('| Verdict | ' + RD.scenarioComparison.map(function(c){return c.ok ? 'On track' : (money(c.need-c.pot) + ' short');}).join(' | ') + ' |');
+    add('');
+  }
+
+  // ===== 10. ASSUMPTIONS =====
+  add('## ' + (RD.scenarioComparison && RD.scenarioComparison.length ? '10' : '9') + '. Assumptions Behind These Numbers');
+  add('');
+  add('Change any of these in the dashboard sidebar and every number above will move \u2014 that\u2019s normal, not a sign anything is wrong.');
+  add('');
+  add('- Investment growth during retirement (real, after inflation): ' + pct1(RD.assumptions.realReturnPct));
+  add('- Inflation assumption: ' + pct1(RD.assumptions.inflationPct));
+  add('- Market volatility used in simulations: ' + pct1(RD.assumptions.volatilityPct));
+  add('- Pension access age: ' + RD.assumptions.pensionAccessAge);
+  add('- SIPP tax rate on withdrawal (of the taxable 75%): ' + pct1(RD.assumptions.sippTaxRatePct));
+  add('- Planning horizon (age money needs to last to): ' + RD.assumptions.planningHorizonAge);
+  add('');
+  add('---');
+  add('');
+  add('*End of report. This summary was generated automatically from the FIRE dashboard\u2019s live inputs \u2014 double-check anything important against your actual statements before acting on it.*');
+
+  return L.join('\n');
+}
+
+function downloadReportFile() {
+  var md = buildFireReportMarkdown();
+  var blob = new Blob([md], { type: 'text/markdown' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href = url;
+  a.download = 'fire-report-' + new Date().toISOString().slice(0,10) + '.md';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function copyReportToClipboard() {
+  var md = buildFireReportMarkdown();
+  function showCopied() {
+    var el = G('reportStatus'); if (!el) return;
+    el.style.opacity = '1'; clearTimeout(el._timeout);
+    el._timeout = setTimeout(function() { el.style.opacity = '0'; }, 1500);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(md).then(showCopied, function() { downloadReportFile(); });
+  } else {
+    // Fallback for older/locked-down browsers: a temporary textarea + execCommand
+    var ta = document.createElement('textarea'); ta.value = md; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); showCopied(); } catch(e) { downloadReportFile(); }
+    document.body.removeChild(ta);
+  }
+}
 
 function setupListeners(){document.querySelectorAll('.sidebar input,.sidebar select').forEach(function(el){el.addEventListener('input',function(){updateRD();scheduleCalc();saveToStorage();});});}
 function updateRD(){G('realReturnVal').textContent=parseFloat(G('realReturn').value).toFixed(1)+'%';G('inflationVal').textContent=parseFloat(G('inflation').value).toFixed(1)+'%';G('volatilityVal').textContent=Math.round(parseFloat(G('volatility').value))+'%';}
@@ -1648,6 +1934,10 @@ try {
   renderWithdrawalOrder();
   updateRD();
   setupListeners();
+  var exportReportBtn = G('exportReportBtn');
+  if (exportReportBtn) exportReportBtn.addEventListener('click', downloadReportFile);
+  var copyReportBtn = G('copyReportBtn');
+  if (copyReportBtn) copyReportBtn.addEventListener('click', copyReportToClipboard);
   var addPlannedBtn = G('addPlannedBtn');
   if (addPlannedBtn) addPlannedBtn.addEventListener('click', function() { plannedCosts.push({desc:'New cost', amount:0, age: num('retireAge')||60}); renderPlannedCosts(); scheduleCalc(); saveToStorage(); });
   ['p1ISAContrib','p2ISAContrib'].forEach(function(id){ var el = G(id); if (el) el.addEventListener('change', function(){ if ((parseFloat(el.value)||0)*12 > 20000) { el.value = ISA_MONTHLY_CAP.toFixed(2); scheduleCalc(); saveToStorage(); } }); });
