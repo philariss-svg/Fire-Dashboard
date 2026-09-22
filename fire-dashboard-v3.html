@@ -299,9 +299,10 @@
   </div>
   <input type="file" id="importFile" accept=".json" style="display:none;">
   <div style="display:flex;gap:8px;margin-bottom:8px;">
-    <button class="add-btn" id="exportReportBtn" style="margin-top:0;flex:1;">&#128196; Export Report</button>
-    <button class="add-btn" id="copyReportBtn" style="margin-top:0;flex:1;">&#128203; Copy Report</button>
+    <button class="add-btn" id="exportReportBtn" style="margin-top:0;flex:1;">&#128196; Markdown Report</button>
+    <button class="add-btn" id="exportHtmlReportBtn" style="margin-top:0;flex:1;">&#127760; HTML Report</button>
   </div>
+  <button class="add-btn" id="copyReportBtn" style="margin-top:0;width:100%;margin-bottom:8px;">&#128203; Copy Report (for pasting into an AI)</button>
   <p style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">A full, plain-English write-up of where you stand &mdash; great for your own records, or to paste into an AI assistant for a second opinion.</p>
   <div id="reportStatus" style="font-size:11px;color:var(--green);text-align:center;margin-bottom:4px;opacity:0;transition:opacity 0.3s;">Copied!</div>
   <div id="saveStatus" style="font-size:11px;color:var(--green);text-align:center;margin-bottom:4px;opacity:0;transition:opacity 0.3s;">Saved</div>
@@ -1868,9 +1869,250 @@ function buildFireReportMarkdown() {
   return L.join('\n');
 }
 
+// ===== #19 EXPORT REPORT (HTML) — a properly designed, standalone page version of the same report =====
+function buildFireReportHTML() {
+  if (!window.reportData) { try { calculate(); } catch(e) {} }
+  var RD = window.reportData;
+  if (!RD) return '<!DOCTYPE html><html><body><p>No data yet — fill in the dashboard first.</p></body></html>';
+
+  var p1 = escHtml(RD.names.p1), p2 = escHtml(RD.names.p2);
+  var genDate = new Date(RD.generatedAt).toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  function money(n) { return fmt(Math.round(n)); }
+  function pct1(n) { return (Math.round(n*10)/10) + '%'; }
+  function pill(kind, text) { return '<span class="pill ' + kind + '">' + text + '</span>'; }
+
+  // ----- Section: hero stat cards -----
+  var coastPill = RD.coast.achieved ? pill('good', 'Achieved') : pill('warn', money(RD.coast.target - RD.coast.current) + ' to go');
+  var trackPill = RD.yearsToRE === 0 ? pill('good', 'Ready now') : RD.yearsToRE > 0 ? pill(RD.reAge <= RD.retireAge ? 'good' : 'warn', 'Age ' + RD.reAge) : pill('bad', 'Beyond 40yr window');
+
+  var heroCards =
+    '<div class="stat-card"><div class="stat-label">Total net worth</div><div class="stat-value">' + money(RD.netWorth.total) + '</div><div class="stat-sub">Investable ' + money(RD.netWorth.investable) + (RD.netWorth.includeProperty!=='no' ? ' + Property ' + money(RD.netWorth.property) : '') + '</div></div>' +
+    '<div class="stat-card"><div class="stat-label">FIRE number (age ' + RD.retireAge + ')</div><div class="stat-value">' + money(RD.reNumber) + '</div><div class="stat-sub">' + pct1(RD.progressPct) + ' funded so far</div></div>' +
+    '<div class="stat-card"><div class="stat-label">Projected retirement</div><div class="stat-value">' + trackPill + '</div><div class="stat-sub">' + (RD.yearsToRE > 0 ? RD.yearsToRE + ' year' + (RD.yearsToRE===1?'':'s') + ' from now' : RD.yearsToRE === 0 ? 'You could stop today' : 'Adjust plan') + '</div></div>' +
+    '<div class="stat-card"><div class="stat-label">Coast FI</div><div class="stat-value">' + coastPill + '</div><div class="stat-sub">' + (RD.coast.achieved ? 'No more saving required' : 'to reach it without saving more') + '</div></div>';
+
+  // ----- Section: milestones -----
+  var milestoneCards = RD.milestones.map(function(m) {
+    var statusHtml = m.reached
+      ? pill('good', m.isCoast ? 'Achieved' : 'On track')
+      : pill('warn', money(m.target - m.compare) + ' to go');
+    var probLine = '';
+    if (m.reachProb != null) probLine += '<div class="ms-prob">' + m.reachProb + '% chance of reaching it by age ' + RD.retireAge + '</div>';
+    if (m.survivalProb != null) probLine += '<div class="ms-prob">' + m.survivalProb + '% chance it lasts to age ' + RD.retirementEnd + '</div>';
+    return '<div class="ms-card' + (m.reached ? ' reached' : '') + '">' +
+      '<div class="ms-icon">' + m.icon + '</div>' +
+      '<div class="ms-name">' + escHtml(m.name) + '</div>' +
+      '<div class="ms-target">' + money(m.target) + '</div>' +
+      '<div class="ms-label">' + m.targetLabel + '</div>' +
+      '<div class="ms-status">' + statusHtml + '</div>' +
+      probLine +
+      '</div>';
+  }).join('');
+
+  // ----- Section: bridge -----
+  var bridgeHtml = '';
+  if (RD.bridge.durationYears === 0) {
+    bridgeHtml = '<p>Good news — you don\u2019t have one. Your SIPP is accessible from your target retirement age, so there\u2019s no unfunded gap to plan around.</p>';
+  } else {
+    var normalRes = RD.bridge.stressResults[0];
+    var bridgeVerdict = !normalRes ? '' : normalRes.prob >= 85
+      ? '<p class="prose-good">Your bridge holds up comfortably even under normal market conditions — a genuinely strong position.</p>'
+      : normalRes.prob >= 60
+      ? '<p class="prose-warn">Your bridge survives ' + normalRes.prob + '% of simulations under normal markets — solid, but worth keeping an eye on rather than treating as bulletproof.</p>'
+      : '<p class="prose-bad">Under your own assumptions, the bridge only survives ' + normalRes.prob + '% of simulations. Worth taking seriously — a bigger cash buffer or a later retirement age are the two levers that move this number most.</p>';
+
+    bridgeHtml =
+      '<p>Your SIPP is locked away until age ' + RD.pensionAccessAge + '. If you retire earlier, there\u2019s a gap — <strong>the bridge</strong> — where you\u2019re living entirely off ISAs, GIAs and cash with no fresh income. It\u2019s the riskiest stretch of any early retirement because you\u2019re selling investments, not buying them.</p>' +
+      '<div class="kv-grid">' +
+        '<div><span class="kv-label">Length</span><span class="kv-val">' + RD.bridge.durationYears + ' year' + (RD.bridge.durationYears===1?'':'s') + '</span></div>' +
+        '<div><span class="kv-label">Total cost</span><span class="kv-val">' + money(RD.bridge.totalCost) + '</span></div>' +
+        '<div><span class="kv-label">Funding available</span><span class="kv-val">' + money(RD.bridge.fundingAvailable) + '</span></div>' +
+        '<div><span class="kv-label">Funded</span><span class="kv-val">' + Math.min(100,RD.bridge.fundedPct).toFixed(0) + '%</span></div>' +
+      '</div>' +
+      bridgeVerdict +
+      '<h3>Bridge phases</h3>' +
+      '<div class="phase-list">' + RD.bridge.phases.map(function(ph) {
+        return '<div class="phase-card"><div class="phase-name">' + escHtml(ph.name) + ' <span class="phase-ages">age ' + ph.fromAge + '\u2013' + ph.toAge + '</span></div>' +
+          '<div class="phase-row"><span>Spending needed</span><span>' + money(ph.spend) + '</span></div>' +
+          (ph.pension > 0 ? '<div class="phase-row"><span>Pension covers</span><span class="ok">\u2212' + money(ph.pension) + '</span></div>' : '') +
+          '<div class="phase-row total"><span>Gap to fund</span><span>' + money(ph.gap) + '</span></div>' +
+          '<div class="phase-source">Paid from: ' + ph.sources.join(', ') + '</div></div>';
+      }).join('') + '</div>' +
+      '<h3>Stress tests</h3>' +
+      '<table><thead><tr><th>Scenario</th><th>What it models</th><th>Bridge survives</th></tr></thead><tbody>' +
+      RD.bridge.stressResults.map(function(sr) {
+        return '<tr><td>' + escHtml(sr.name) + '</td><td>' + escHtml(sr.desc) + '</td><td class="num">' + sr.prob + '%</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  // ----- Section: accounts -----
+  function accountBlock(name, a) {
+    var total = a.isa + a.sipp + a.gia + a.cash;
+    if (total === 0 && a.isaContrib === 0 && a.sippContrib === 0 && a.giaContrib === 0) return '';
+    return '<div class="account-block"><h3>' + escHtml(name) + '</h3><table><thead><tr><th>Account</th><th>Balance</th><th>Monthly in</th><th>Growth</th></tr></thead><tbody>' +
+      '<tr><td>ISA (tax-free)</td><td class="num">' + money(a.isa) + '</td><td class="num">' + money(a.isaContrib) + '/mo</td><td class="num">' + a.isaGrowth + '%</td></tr>' +
+      '<tr><td>SIPP (locked to ' + RD.pensionAccessAge + ')</td><td class="num">' + money(a.sipp) + '</td><td class="num">' + money(a.sippContrib) + '/mo</td><td class="num">' + a.sippGrowth + '%</td></tr>' +
+      '<tr><td>GIA</td><td class="num">' + money(a.gia) + '</td><td class="num">' + money(a.giaContrib) + '/mo</td><td class="num">' + a.giaGrowth + '%</td></tr>' +
+      '<tr><td>Cash</td><td class="num">' + money(a.cash) + '</td><td class="num">\u2014</td><td class="num">\u2014</td></tr>' +
+      '<tr class="total-row"><td>Total</td><td class="num">' + money(total) + '</td><td></td><td></td></tr>' +
+      '</tbody></table></div>';
+  }
+
+  // ----- Section: scenario comparison -----
+  var scenarioHtml = '';
+  if (RD.scenarioComparison && RD.scenarioComparison.length) {
+    scenarioHtml = '<h2>Comparing Different Retirement Ages</h2><table><thead><tr><th></th>' +
+      RD.scenarioComparison.map(function(c){return '<th>Age ' + c.a + '</th>';}).join('') + '</tr></thead><tbody>' +
+      '<tr><td>Amount needed</td>' + RD.scenarioComparison.map(function(c){return '<td class="num">'+money(c.need)+'</td>';}).join('') + '</tr>' +
+      '<tr><td>Projected pot</td>' + RD.scenarioComparison.map(function(c){return '<td class="num">'+money(c.pot)+'</td>';}).join('') + '</tr>' +
+      '<tr><td>Progress</td>' + RD.scenarioComparison.map(function(c){return '<td class="num">'+Math.min(999,c.prog).toFixed(0)+'%</td>';}).join('') + '</tr>' +
+      '<tr><td>Bridge length</td>' + RD.scenarioComparison.map(function(c){return '<td class="num">'+c.bridge+' yr'+(c.bridge===1?'':'s')+'</td>';}).join('') + '</tr>' +
+      '<tr class="total-row"><td>Verdict</td>' + RD.scenarioComparison.map(function(c){return '<td class="num">'+(c.ok?'<span class="ok">On track</span>':'<span class="bad">'+money(c.need-c.pot)+' short</span>')+'</td>';}).join('') + '</tr>' +
+      '</tbody></table>';
+  }
+
+  var coastNarrative = RD.coast.achieved
+    ? '<strong>Already achieved.</strong> ' + money(RD.coast.current) + ' invested today, left to grow untouched at roughly ' + pct1(RD.coast.growthRealPct) + ' a year after inflation, is expected to reach your FIRE number by age ' + RD.retireAge + ' — even if you stopped saving completely.'
+    : 'You\u2019d need <strong>' + money(RD.coast.target) + '</strong> invested today to coast to your number by age ' + RD.retireAge + ' without saving another penny. You currently have ' + money(RD.coast.current) + ', so you\u2019re <strong>' + money(RD.coast.target - RD.coast.current) + ' short</strong> of that particular milestone.';
+
+  var headlineNarrative = RD.yearsToRE === 0 ? 'You could retire right now and your plan holds up.' :
+    RD.yearsToRE > 0 ? ('At your current pace, you\u2019re on track to hit your number around age <strong>' + RD.reAge + '</strong> (in about ' + RD.yearsToRE + ' year' + (RD.yearsToRE===1?'':'s') + '), which is ' + (RD.reAge <= RD.retireAge ? 'at or before' : 'a little later than') + ' your target of age ' + RD.retireAge + '.') :
+    'On current numbers, the model can\u2019t find a retirement date within the next 40 years — usually fixable by saving a bit more, spending a bit less in retirement, or pushing the target age out.';
+
+  var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<title>FIRE Plan Report \u2014 ' + p1 + ' &amp; ' + p2 + '</title>' +
+    '<style>' +
+    ':root{--bg:#f5f6fa;--paper:#ffffff;--ink:#1a1d27;--muted:#6b7085;--line:#e6e8ef;--accent:#6c5ce7;--accent-light:#efecfc;--green:#00976f;--green-bg:#e5f7f1;--orange:#b5760a;--orange-bg:#fdf1dd;--red:#c23a3a;--red-bg:#fbe9e9;}' +
+    '*{box-sizing:border-box;}' +
+    'body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.6;}' +
+    '.wrap{max-width:820px;margin:0 auto;padding:16px 16px 64px;}' +
+    '.paper{background:var(--paper);border-radius:16px;padding:32px 28px;box-shadow:0 1px 3px rgba(20,20,40,0.06);}' +
+    'h1{font-family:Georgia,"Times New Roman",serif;font-size:30px;margin:0 0 4px;}' +
+    'h2{font-family:Georgia,"Times New Roman",serif;font-size:21px;margin:36px 0 12px;padding-top:20px;border-top:1px solid var(--line);}' +
+    'h2:first-of-type{border-top:none;padding-top:0;margin-top:28px;}' +
+    'h3{font-size:15px;margin:22px 0 10px;color:var(--ink);}' +
+    'p{margin:0 0 14px;color:var(--ink);}' +
+    '.meta{color:var(--muted);font-size:13px;margin-bottom:4px;}' +
+    '.disclaimer{color:var(--muted);font-size:12.5px;font-style:italic;border-top:1px solid var(--line);padding-top:16px;margin-top:36px;}' +
+    '.hero-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:24px 0 8px;}' +
+    '@media(min-width:600px){.hero-grid{grid-template-columns:repeat(4,1fr);}}' +
+    '.stat-card{background:var(--accent-light);border-radius:12px;padding:14px;}' +
+    '.stat-label{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px;}' +
+    '.stat-value{font-size:19px;font-weight:700;color:var(--ink);}' +
+    '.stat-sub{font-size:11.5px;color:var(--muted);margin-top:3px;}' +
+    '.pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:13px;font-weight:600;}' +
+    '.pill.good{background:var(--green-bg);color:var(--green);} .pill.warn{background:var(--orange-bg);color:var(--orange);} .pill.bad{background:var(--red-bg);color:var(--red);}' +
+    '.prose-good{color:var(--green);} .prose-warn{color:var(--orange);} .prose-bad{color:var(--red);}' +
+    '.ms-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:16px 0;}' +
+    '@media(min-width:600px){.ms-grid{grid-template-columns:repeat(3,1fr);}}' +
+    '.ms-card{border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center;}' +
+    '.ms-card.reached{border-color:var(--green);background:var(--green-bg);}' +
+    '.ms-icon{font-size:22px;}' +
+    '.ms-name{font-weight:700;font-size:13.5px;margin-top:4px;}' +
+    '.ms-target{font-size:16px;font-weight:700;margin-top:6px;}' +
+    '.ms-label{font-size:11px;color:var(--muted);}' +
+    '.ms-status{margin-top:8px;}' +
+    '.ms-prob{font-size:10.5px;color:var(--muted);margin-top:4px;}' +
+    '.kv-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:16px 0;}' +
+    '@media(min-width:600px){.kv-grid{grid-template-columns:repeat(4,1fr);}}' +
+    '.kv-grid>div{background:var(--bg);border-radius:10px;padding:10px 12px;}' +
+    '.kv-label{display:block;font-size:11px;color:var(--muted);}' +
+    '.kv-val{display:block;font-size:15px;font-weight:700;margin-top:2px;}' +
+    '.phase-list{display:grid;gap:10px;margin:12px 0;}' +
+    '.phase-card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;}' +
+    '.phase-name{font-weight:700;font-size:14px;} .phase-ages{font-weight:400;color:var(--muted);font-size:12px;}' +
+    '.phase-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;}' +
+    '.phase-row.total{font-weight:700;border-top:1px solid var(--line);margin-top:4px;padding-top:6px;}' +
+    '.phase-source{font-size:11.5px;color:var(--muted);margin-top:6px;}' +
+    'table{width:100%;border-collapse:collapse;margin:12px 0 20px;font-size:13px;}' +
+    'th{text-align:left;color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.02em;border-bottom:1px solid var(--line);padding:6px 8px;}' +
+    'td{padding:7px 8px;border-bottom:1px solid var(--line);}' +
+    'td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}' +
+    'tr.total-row td{font-weight:700;border-top:2px solid var(--line);}' +
+    '.ok{color:var(--green);} .bad{color:var(--red);}' +
+    '.account-block{margin-bottom:8px;}' +
+    '@media print{body{background:#fff;} .paper{box-shadow:none;padding:0;}}' +
+    '</style></head><body><div class="wrap"><div class="paper">' +
+
+    '<h1>\ud83d\udd25 FIRE Plan Report</h1>' +
+    '<div class="meta">' + p1 + ' &amp; ' + p2 + ' &middot; Generated ' + genDate + '</div>' +
+    '<p class="meta">All figures are in today\u2019s money (adjusted for inflation) unless stated otherwise. This is a personal planning summary, not regulated financial advice.</p>' +
+
+    '<div class="hero-grid">' + heroCards + '</div>' +
+
+    '<h2>The Headline</h2>' +
+    '<p>' + headlineNarrative + '</p>' +
+    '<p>Your FIRE number — what you need saved by age ' + RD.retireAge + ' — is <strong>' + money(RD.reNumber) + '</strong>. Projected forward from today\u2019s balances, you\u2019re on course for <strong>' + money(RD.projectedAtRetire) + '</strong>, which is ' + pct1(RD.progressPct) + ' of the target.</p>' +
+    '<p><strong>Coast FI:</strong> ' + coastNarrative + '</p>' +
+    '<p style="color:var(--muted);font-size:13px;"><em>Coast FI asks "if I stopped saving today, would I still get there?" Being on track for your retirement age just means your current saving-and-growing plan gets you there — you don\u2019t need to have already banked the whole amount.</em></p>' +
+
+    '<h2>Milestones</h2>' +
+    '<p>Different "flavours" of retirement, from bare-bones to living large. Each asks: if you retire at ' + RD.retireAge + ', is your projected pot big enough to fund that lifestyle for life?</p>' +
+    '<div class="ms-grid">' + milestoneCards + '</div>' +
+    '<p style="color:var(--muted);font-size:12.5px;"><em>The percentages come from running the numbers 1,000 times with randomly varying investment returns (a Monte Carlo simulation) — a stress-test against normal market ups and downs, not a guarantee.</em></p>' +
+
+    '<h2>The Bridge</h2>' +
+    bridgeHtml +
+
+    '<h2>Income, Spending &amp; Saving Rate</h2>' +
+    '<table><thead><tr><th></th><th class="num">Monthly</th><th class="num">Annual</th></tr></thead><tbody>' +
+    '<tr><td>Household income</td><td class="num">' + money(RD.income.totalMonthly) + '</td><td class="num">' + money(RD.income.totalMonthly*12) + '</td></tr>' +
+    '<tr><td>Outgoings</td><td class="num">' + money(RD.expenses.totalMonthlyOutgoings) + '</td><td class="num">' + money(RD.expenses.totalMonthlyOutgoings*12) + '</td></tr>' +
+    '<tr><td>Going into investments</td><td class="num">' + money(RD.contributions.totalMonthly) + '</td><td class="num">' + money(RD.contributions.annual) + '</td></tr>' +
+    '<tr class="total-row"><td>Left over (surplus)</td><td class="num">' + money(RD.monthlySurplus) + '</td><td class="num">' + money(RD.monthlySurplus*12) + '</td></tr>' +
+    '</tbody></table>' +
+    '<p><strong>Savings rate: ' + pct1(RD.savingsRatePct) + '</strong> of take-home income — the single biggest lever in the plan. It decides how fast the retirement date in the headline moves.</p>' +
+
+    '<h2>Account Breakdown</h2>' +
+    accountBlock(RD.names.p1, RD.accounts.p1) + accountBlock(RD.names.p2, RD.accounts.p2) +
+
+    '<h2>Guaranteed Pension Income</h2>' +
+    '<p>Money that turns up regardless of the stock market — this directly reduces how much you need saved, since it covers part of your spending automatically.</p>' +
+    '<table><thead><tr><th></th><th>' + p1 + '</th><th>' + p2 + '</th></tr></thead><tbody>' +
+    '<tr><td>Defined Benefit</td><td>' + (RD.pensions.p1.db > 0 ? money(RD.pensions.p1.db) + '/yr from ' + RD.pensions.p1.dbAge : 'None entered') + '</td><td>' + (RD.pensions.p2.db > 0 ? money(RD.pensions.p2.db) + '/yr from ' + RD.pensions.p2.dbAge : 'None entered') + '</td></tr>' +
+    '<tr><td>State Pension</td><td>' + (RD.pensions.p1.sp > 0 ? money(RD.pensions.p1.sp) + '/yr from ' + RD.pensions.p1.spAge : 'None entered') + '</td><td>' + (RD.pensions.p2.sp > 0 ? money(RD.pensions.p2.sp) + '/yr from ' + RD.pensions.p2.spAge : 'None entered') + '</td></tr>' +
+    '</tbody></table>' +
+    '<p><strong>Combined guaranteed income once everything has kicked in: ' + money(RD.pensions.totalAnnual) + '/year.</strong></p>' +
+
+    '<h2>Planned Retirement Spending</h2>' +
+    '<table><thead><tr><th>Ages</th><th class="num">Planned annual spend</th></tr></thead><tbody>' +
+    RD.spendingPhases.map(function(p){return '<tr><td>'+p.fromAge+'\u2013'+p.toAge+'</td><td class="num">'+money(p.amount)+'</td></tr>';}).join('') +
+    '</tbody></table>' +
+
+    scenarioHtml +
+
+    '<h2>Assumptions Behind These Numbers</h2>' +
+    '<p>Change any of these in the dashboard sidebar and every number above moves — that\u2019s normal, not a sign anything is wrong.</p>' +
+    '<div class="kv-grid">' +
+    '<div><span class="kv-label">Growth (real)</span><span class="kv-val">' + pct1(RD.assumptions.realReturnPct) + '</span></div>' +
+    '<div><span class="kv-label">Inflation</span><span class="kv-val">' + pct1(RD.assumptions.inflationPct) + '</span></div>' +
+    '<div><span class="kv-label">Volatility</span><span class="kv-val">' + pct1(RD.assumptions.volatilityPct) + '</span></div>' +
+    '<div><span class="kv-label">Pension access age</span><span class="kv-val">' + RD.assumptions.pensionAccessAge + '</span></div>' +
+    '<div><span class="kv-label">SIPP tax rate</span><span class="kv-val">' + pct1(RD.assumptions.sippTaxRatePct) + '</span></div>' +
+    '<div><span class="kv-label">Planning horizon</span><span class="kv-val">Age ' + RD.assumptions.planningHorizonAge + '</span></div>' +
+    '</div>' +
+
+    '<p class="disclaimer">This summary was generated automatically from the FIRE dashboard\u2019s live inputs. Double-check anything important against your actual statements before acting on it.</p>' +
+
+    '</div></div></body></html>';
+
+  return html;
+}
+
+function downloadReportHTMLFile() {
+  var html = buildFireReportHTML();
+  var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href = url;
+  a.download = 'fire-report-' + new Date().toISOString().slice(0,10) + '.html';
+  a.click();
+  setTimeout(function(){ window.open(url, '_blank'); URL.revokeObjectURL(url); }, 300);
+}
+
 function downloadReportFile() {
   var md = buildFireReportMarkdown();
-  var blob = new Blob([md], { type: 'text/markdown' });
+  var blob = new Blob(['\uFEFF' + md], { type: 'text/markdown;charset=utf-8' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a'); a.href = url;
   a.download = 'fire-report-' + new Date().toISOString().slice(0,10) + '.md';
@@ -1936,6 +2178,8 @@ try {
   setupListeners();
   var exportReportBtn = G('exportReportBtn');
   if (exportReportBtn) exportReportBtn.addEventListener('click', downloadReportFile);
+  var exportHtmlReportBtn = G('exportHtmlReportBtn');
+  if (exportHtmlReportBtn) exportHtmlReportBtn.addEventListener('click', downloadReportHTMLFile);
   var copyReportBtn = G('copyReportBtn');
   if (copyReportBtn) copyReportBtn.addEventListener('click', copyReportToClipboard);
   var addPlannedBtn = G('addPlannedBtn');
